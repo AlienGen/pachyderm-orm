@@ -10,7 +10,7 @@ class Collection
 
   }
 
-  public function add(Model $m) {
+  public function add(AbstractModel $m) {
     $this->data[] = $m;
   }
 
