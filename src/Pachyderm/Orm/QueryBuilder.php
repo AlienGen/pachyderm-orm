@@ -42,7 +42,7 @@ class QueryBuilder {
         }
 
         if($value === NULL && $operator !== NULL) {
-            $this->append($globalOperator, [$field => [$operator]]);
+            $this->append($globalOperator, [$operator => [$field]]);
             return $this;
         }
 
@@ -84,7 +84,8 @@ $subquery = new QueryBuilder();
 
 $subquery
   ->where('company_id', '=', 1)
-  ->where('date', '<', date('Y-m-d'));
+  ->where('date', '<', date('Y-m-d'))
+  ->where('user_id', 'IS NULL');
 
 $query = new QueryBuilder();
 
