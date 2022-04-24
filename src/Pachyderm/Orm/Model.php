@@ -2,33 +2,35 @@
 
 namespace Pachyderm\Orm;
 
-use Pachyderm\Db;
+use \Pachyderm\Db;
 
-use App\Exceptions\NotFoundException;
+use Exceptions\ModelNotFoundException;
 
 abstract class Model extends AbstractModel
 {
   protected $scopes = array();
 
-  public static function paginate(Paginator $paginator) {
+  public static function paginate(Paginator $paginator)
+  {
     return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
   }
 
-  public static function findAll($where = NULL, $order = NULL, $offset = 0, $limit = 50) {
+  public static function findAll($where = NULL, $order = NULL, $offset = 0, $limit = 50)
+  {
     $model = new static();
 
     $query = new QueryBuilder();
     $query->where($where);
 
-    if(!empty($model->scopes)) {
-      foreach($model->scopes AS $scopeName => $scope) {
+    if (!empty($model->scopes)) {
+      foreach ($model->scopes as $scopeName => $scope) {
         $query->where($scope);
       }
     }
 
     $items = Db::findAll($model->table, $query->build(), $order, $offset, $limit);
     $collection = new Collection();
-    foreach($items AS $item) {
+    foreach ($items as $item) {
       $collection->add(new static($item));
     }
     return $collection;
@@ -36,21 +38,21 @@ abstract class Model extends AbstractModel
 
   public static function findFirst($where = null)
   {
-      $collection = self::findAll($where, null, 0, 1);
-      return $collection->getIndex(0);
+    $collection = self::findAll($where, null, 0, 1);
+    return $collection->getIndex(0);
   }
 
-  public static function find($id) {
-
-    if(empty($id)) {
-      throw new NotFoundException('Model ' . get_called_class() . ' with id=' . $id . ' not found!');
+  public static function find($id)
+  {
+    if (empty($id)) {
+      throw new ModelNotFoundException('Model ' . get_called_class() . ' with id=' . $id . ' not found!');
     }
 
     $model = new static();
     $data = Db::findOne($model->table, $model->primary_key, $id);
 
-    if(empty($data)) {
-      throw new NotFoundException('Model not found!');
+    if (empty($data)) {
+      throw new ModelNotFoundException('Model not found!');
     }
 
     return new static($data);
@@ -76,7 +78,7 @@ abstract class Model extends AbstractModel
     }
 
     if (!$id) {
-      throw new Exception('Unable to create the entity!');
+      throw new \Exception('Unable to create the entity!');
     }
     return static::find($id);
   }
@@ -87,7 +89,8 @@ abstract class Model extends AbstractModel
       return Db::update(
         $this->table,
         $this->data,
-        ['=' =>
+        [
+          '=' =>
           [
             $this->primary_key,
             $this->data[$this->primary_key]
@@ -98,7 +101,7 @@ abstract class Model extends AbstractModel
 
     $where = array();
     foreach ($this->primary_key as $pk) {
-        $where['AND'][] = ['=' => [$pk, $this->data[$pk]]];
+      $where['AND'][] = ['=' => [$pk, $this->data[$pk]]];
     }
     return Db::update($this->table, $this->data, $where);
   }
@@ -117,15 +120,16 @@ abstract class Model extends AbstractModel
     return Db::delete($this->table, $this->primary_key, $values);
   }
 
-  public function addScope($name, $scope = NULL) {
+  public function addScope($name, $scope = NULL)
+  {
     $this->scopes[$name] = $scope;
   }
 
-  public static function where($field, $operator, $value) {
+  public static function where($field, $operator, $value)
+  {
     $builder = new QueryBuilder();
     $builder->setModel(get_called_class());
     $builder->where($field, $operator, $value);
     return $builder;
   }
 }
-
