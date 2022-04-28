@@ -1,6 +1,6 @@
 <?php
 
-namespace Pachyderm\Orm\Exceptions;
+namespace Pachyderm\Orm\Exception;
 
 class ModelNotFoundException extends \Exception
 {

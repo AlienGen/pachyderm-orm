@@ -3,8 +3,7 @@
 namespace Pachyderm\Orm;
 
 use \Pachyderm\Db;
-
-use Exceptions\ModelNotFoundException;
+use \Pachyderm\Orm\Exception\ModelNotFoundException;
 
 abstract class Model extends AbstractModel
 {
