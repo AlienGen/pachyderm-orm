@@ -9,6 +9,17 @@ abstract class Model extends AbstractModel
 {
   protected $_scopes = array();
 
+  public function __construct()
+  {
+    if (empty($this->table)) {
+      throw new \Exception('Property "table" must be set on model ' . get_called_class());
+    }
+
+    if (empty($this->primary_key)) {
+      throw new \Exception('Property "table" must be set on model ' . get_called_class());
+    }
+  }
+
   private function _execute_hook(string $hook, $data = NULL)
   {
     if (method_exists($this, $hook)) {

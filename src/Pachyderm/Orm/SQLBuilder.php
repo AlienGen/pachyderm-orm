@@ -5,7 +5,7 @@ namespace Pachyderm\Orm;
 class SQLBuilder
 {
     protected string $_table;
-    protected Model $_model;
+    protected Model|null $_model;
 
     protected array $_fields = [];
     protected array $_joins = [];
@@ -22,11 +22,12 @@ class SQLBuilder
 
         if (is_string($table)) {
             $this->_table = $table;
+            $this->_model = NULL;
             return;
         }
 
-        if (new $table() instanceof Model) {
-            $model = new $table();
+        $model = new $table();
+        if ($model instanceof Model) {
             $this->_table = $model->table;
             $this->_model = $model;
             return;
@@ -141,6 +142,9 @@ class SQLBuilder
      */
     public function get(): Collection
     {
+        if ($this->_model === NULL) {
+            throw new \Exception('Unable to call "get" on a builder not associated with a model!');
+        }
         $model = $this->_model;
         return $model::query($this);
     }
