@@ -17,23 +17,30 @@ abstract class Model extends AbstractModel
     return $data;
   }
 
-  public function save(): void
+  private function _build_where(): array
   {
+    // Single key.
     if (!is_array($this->primary_key)) {
-      $where = [
+      return [
         '=' =>
         [
           $this->primary_key,
           $this[$this->primary_key]
         ]
       ];
-    } else {
-      $where = array();
-      foreach ($this->primary_key as $pk) {
-        $where['AND'][] = ['=' => [$pk, $this[$pk]]];
-      }
     }
 
+    // Multiple keys.
+    $where = array();
+    foreach ($this->primary_key as $pk) {
+      $where['AND'][] = ['=' => [$pk, $this[$pk]]];
+    }
+    return $where;
+  }
+
+  public function save(): void
+  {
+    $where = $this->_build_where();
     $data = $this->_execute_hook('pre_update', $this->_data);
     Db::update($this->table, $data, $where);
     $this->_execute_hook('post_update');
@@ -41,17 +48,9 @@ abstract class Model extends AbstractModel
 
   public function delete(): void
   {
-    if (!is_array($this->primary_key)) {
-      return Db::delete($this->table, $this->primary_key, $this[$this->primary_key]);
-    }
-
-    $values = array();
-    foreach ($this->primary_key as $pk) {
-      $values[] = $this[$pk];
-    }
-
+    $where = $this->_build_where();
     $this->_execute_hook('pre_delete');
-    Db::delete($this->table, $this->primary_key, $values);
+    Db::delete($this->table, $this->primary_key, $where);
     $this->_execute_hook('post_delete');
   }
 
