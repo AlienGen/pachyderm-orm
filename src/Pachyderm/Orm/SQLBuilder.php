@@ -18,18 +18,18 @@ class SQLBuilder
     public function __construct(string|Model $table)
     {
         $this->_filters = new QueryBuilder();
-        $this->_filters->prepend($table);
 
         if (is_string($table)) {
             $this->_table = $table;
+            $this->_filters->prepend($this->_table);
             $this->_model = NULL;
             return;
         }
 
-        $model = new $table();
-        if ($model instanceof Model) {
-            $this->_table = $model->table;
-            $this->_model = $model;
+        if ($table instanceof Model) {
+            $this->_table = $table->table;
+            $this->_filters->prepend($this->_table);
+            $this->_model = $table;
             return;
         }
     }

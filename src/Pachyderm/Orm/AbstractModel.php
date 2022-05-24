@@ -72,7 +72,7 @@ abstract class AbstractModel implements \ArrayAccess
      * Account constructor.
      * @param $data array
      */
-    public function __construct($data = array())
+    public function __construct(array $data = array())
     {
         $this->set($data);
     }

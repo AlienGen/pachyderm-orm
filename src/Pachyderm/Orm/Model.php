@@ -9,8 +9,9 @@ abstract class Model extends AbstractModel
 {
   protected $_scopes = array();
 
-  public function __construct()
+  public function __construct(array $data = array())
   {
+    parent::__construct($data);
     if (empty($this->table)) {
       throw new \Exception('Property "table" must be set on model ' . get_called_class());
     }
@@ -77,7 +78,7 @@ abstract class Model extends AbstractModel
    */
   public static function builder(): SQLBuilder
   {
-    return new SQLBuilder(get_called_class());
+    return new SQLBuilder(new static());
   }
 
   public static function paginate(Paginator $paginator): Collection
@@ -98,7 +99,7 @@ abstract class Model extends AbstractModel
 
     // TODO: Replace with PDO later.
     foreach ($values as $key => $value) {
-      $sql = str_replace(':' . $key, $value, $sql);
+      $sql = str_replace(':' . $key, '"' . Db::escape($value) . '"', $sql);
     }
 
     /**
