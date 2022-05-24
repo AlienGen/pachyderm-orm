@@ -45,6 +45,11 @@ class QueryBuilder
             return $this;
         }
 
+        if (is_callable($field)) {
+            $field($this);
+            return $this;
+        }
+
         if ($value === NULL && $operator !== NULL) {
             $this->append($globalOperator, [$operator => [$field]]);
             return $this;
