@@ -2,55 +2,96 @@
 
 namespace Pachyderm\Orm;
 
-class Collection
+class Collection implements \ArrayAccess
 {
-  public $data = array();
+  protected $_data = array();
 
-  public function __construct() {
-
+  public function __construct()
+  {
   }
 
-  public function add(AbstractModel $m) {
+  /**
+   * Array like setter
+   */
+  public function offsetSet($key, $value): void
+  {
+    $this->_data[$key] = $value;
+  }
+
+  /**
+   * Array like exists
+   */
+  public function offsetExists($key): bool
+  {
+    return array_key_exists($key, $this->_data);
+  }
+
+  /**
+   * Array like unset
+   */
+  public function offsetUnset($key): void
+  {
+    unset($this->_data[$key]);
+  }
+
+  /**
+   * Array like getter
+   */
+  public function offsetGet($key)
+  {
+    return $this->_data[$key];
+  }
+
+  public function add(AbstractModel $m): void
+  {
     $this->data[] = $m;
   }
 
-  public function getIndex(int $i) {
-      if (!isset($this->data[$i])) {
-          return null;
-      }
-
-      return $this->data[$i];
+  public function first(): mixed
+  {
+    if (empty($this->_data[0])) {
+      return null;
+    }
+    return $this->_data[0];
   }
 
-  public function toArray() {
+  /**
+   * @deprecated
+   */
+  public function toArray(): array
+  {
     $array = array();
-    foreach($this->data as $m) {
+    foreach ($this->_data as $m) {
       $array[] = $m->toArray();
     }
     return $array;
   }
 
-  public function toObject($pk = null) {
-      $object = array();
-      foreach ($this->data as $m) {
-          if (empty($pk)) {
-              $pk = $m->primary_key;
-          }
-          $object[$m->$pk] = $m->toArray();
+  /**
+   * @deprecated
+   */
+  public function toObject(string $pk = null): iterable
+  {
+    $object = array();
+    foreach ($this->_data as $m) {
+      if (empty($pk)) {
+        $pk = $m->primary_key;
       }
-      return $object;
-  }
-
-  public function save() {
-    $array = array();
-    foreach($this->data as $m) {
-      $array[] = $m->save();
+      $object[$m->$pk] = $m->toArray();
     }
-    return $array;
+    return $object;
   }
 
-  public function delete() {
-    foreach($this->data as $m) {
+  public function save(): void
+  {
+    foreach ($this->_data as $m) {
+      $m->save();
+    }
+  }
+
+  public function delete(): void
+  {
+    foreach ($this->_data as $m) {
       $m->delete();
     }
   }

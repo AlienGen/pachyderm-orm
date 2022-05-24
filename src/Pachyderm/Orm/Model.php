@@ -7,27 +7,101 @@ use \Pachyderm\Orm\Exception\ModelNotFoundException;
 
 abstract class Model extends AbstractModel
 {
-  protected $scopes = array();
+  protected $_scopes = array();
 
-  public static function paginate(Paginator $paginator)
+  private function _execute_hook(string $hook, $data = NULL)
+  {
+    if (method_exists($this, $hook)) {
+      return $this->$hook($data);
+    }
+    return $data;
+  }
+
+  public function save(): void
+  {
+    if (!is_array($this->primary_key)) {
+      $where = [
+        '=' =>
+        [
+          $this->primary_key,
+          $this[$this->primary_key]
+        ]
+      ];
+    } else {
+      $where = array();
+      foreach ($this->primary_key as $pk) {
+        $where['AND'][] = ['=' => [$pk, $this[$pk]]];
+      }
+    }
+
+    $data = $this->_execute_hook('pre_update', $this->_data);
+    Db::update($this->table, $data, $where);
+    $this->_execute_hook('post_update');
+  }
+
+  public function delete(): void
+  {
+    if (!is_array($this->primary_key)) {
+      return Db::delete($this->table, $this->primary_key, $this[$this->primary_key]);
+    }
+
+    $values = array();
+    foreach ($this->primary_key as $pk) {
+      $values[] = $this[$pk];
+    }
+
+    $this->_execute_hook('pre_delete');
+    Db::delete($this->table, $this->primary_key, $values);
+    $this->_execute_hook('post_delete');
+  }
+
+  public function addScope(string $name, $scope = NULL): void
+  {
+    $this->_scopes[$name] = $scope;
+  }
+
+  /**
+   *
+   * Static methods
+   *
+   */
+  public static function paginate(Paginator $paginator): Collection
   {
     return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
   }
 
-  public static function findAll($where = NULL, $order = NULL, $offset = 0, $limit = 50)
+  public static function where($field, $operator, $value): QueryBuilder
+  {
+    $builder = new QueryBuilder();
+    $builder->setModel(get_called_class());
+    $builder->where($field, $operator, $value);
+    return $builder;
+  }
+
+  public static function findAll($where = NULL, $order = NULL, int $offset = 0, int $limit = 50): Collection
   {
     $model = new static();
 
     $query = new QueryBuilder();
     $query->where($where);
 
-    if (!empty($model->scopes)) {
-      foreach ($model->scopes as $scopeName => $scope) {
+    /**
+     * Handle scopes.
+     */
+    if (!empty($model->_scopes)) {
+      foreach ($model->_scopes as $scopeName => $scope) {
         $query->where($scope);
       }
     }
 
+    /**
+     * Query the database.
+     */
     $items = Db::findAll($model->table, $query->build(), $order, $offset, $limit);
+
+    /**
+     * Instantiate the final objects.
+     */
     $collection = new Collection();
     foreach ($items as $item) {
       $collection->add(new static($item));
@@ -35,13 +109,12 @@ abstract class Model extends AbstractModel
     return $collection;
   }
 
-  public static function findFirst($where = null)
+  public static function findFirst($where = null): Model
   {
-    $collection = self::findAll($where, null, 0, 1);
-    return $collection->getIndex(0);
+    return self::findAll($where, null, 0, 1)->first();
   }
 
-  public static function find($id)
+  public static function find($id): Model
   {
     if (empty($id)) {
       throw new ModelNotFoundException('Model ' . get_called_class() . ' with id=' . $id . ' not found!');
@@ -57,7 +130,7 @@ abstract class Model extends AbstractModel
     return new static($data);
   }
 
-  public static function create($data)
+  public static function create(array $data): Model
   {
     $model = new static();
 
@@ -67,7 +140,9 @@ abstract class Model extends AbstractModel
       unset($data[$model->primary_key]);
     }
 
+    $data = $model->_execute_hook('pre_create', $data);
     $id = Db::insert($model->table, $data);
+    $model->_execute_hook('post_create');
 
     if (is_array($model->primary_key)) {
       $id = array();
@@ -80,55 +155,5 @@ abstract class Model extends AbstractModel
       throw new \Exception('Unable to create the entity!');
     }
     return static::find($id);
-  }
-
-  public function save()
-  {
-    if (!is_array($this->primary_key)) {
-      return Db::update(
-        $this->table,
-        $this->data,
-        [
-          '=' =>
-          [
-            $this->primary_key,
-            $this->data[$this->primary_key]
-          ]
-        ]
-      );
-    }
-
-    $where = array();
-    foreach ($this->primary_key as $pk) {
-      $where['AND'][] = ['=' => [$pk, $this->data[$pk]]];
-    }
-    return Db::update($this->table, $this->data, $where);
-  }
-
-  public function delete()
-  {
-    if (!is_array($this->primary_key)) {
-      return Db::delete($this->table, $this->primary_key, $this->data[$this->primary_key]);
-    }
-
-    $values = array();
-    foreach ($this->primary_key as $pk) {
-      $values[] = $this->data[$pk];
-    }
-
-    return Db::delete($this->table, $this->primary_key, $values);
-  }
-
-  public function addScope($name, $scope = NULL)
-  {
-    $this->scopes[$name] = $scope;
-  }
-
-  public static function where($field, $operator, $value)
-  {
-    $builder = new QueryBuilder();
-    $builder->setModel(get_called_class());
-    $builder->where($field, $operator, $value);
-    return $builder;
   }
 }
