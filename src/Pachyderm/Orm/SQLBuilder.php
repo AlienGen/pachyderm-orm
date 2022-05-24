@@ -19,13 +19,18 @@ class SQLBuilder
     {
         $this->_filters = new QueryBuilder();
         $this->_filters->prepend($table);
-        if ($table instanceof Model) {
+
+        if (is_string($table)) {
+            $this->_table = $table;
+            return;
+        }
+
+        if (new $table() instanceof Model) {
             $model = new $table();
             $this->_table = $model->table;
             $this->_model = $model;
             return;
         }
-        $this->_table = $table;
     }
 
     /**
