@@ -44,7 +44,7 @@ class Collection implements \ArrayAccess
 
   public function add(AbstractModel $m): void
   {
-    $this->data[] = $m;
+    $this->_data[] = $m;
   }
 
   public function first(): mixed
