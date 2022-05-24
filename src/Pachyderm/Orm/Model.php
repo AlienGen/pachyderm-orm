@@ -64,48 +64,72 @@ abstract class Model extends AbstractModel
    * Static methods
    *
    */
+  public static function builder(): SQLBuilder
+  {
+    return new SQLBuilder(get_called_class());
+  }
+
   public static function paginate(Paginator $paginator): Collection
   {
     return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
   }
 
-  public static function where($field, $operator, $value): QueryBuilder
+  public static function where($field, $operator, $value): SQLBuilder
   {
-    $builder = new QueryBuilder();
-    $builder->setModel(get_called_class());
-    $builder->where($field, $operator, $value);
-    return $builder;
+    return self::builder()
+      ->where($field, $operator, $value);
+  }
+
+  public static function query(SQLBuilder $builder): Collection
+  {
+    $sql = $builder->build();
+    $values = $builder->values();
+
+    // TODO: Replace with PDO later.
+    foreach ($values as $key => $value) {
+      $sql = str_replace(':' . $key, $value, $sql);
+    }
+
+    /**
+     * Query the database.
+     */
+    $results = Db::query($sql);
+
+    /**
+     * Instantiate the final objects.
+     */
+    $collection = new Collection();
+    while ($item = $results->fetch_assoc()) {
+      $collection->add(new static($item));
+    }
+
+    return $collection;
   }
 
   public static function findAll($where = NULL, $order = NULL, int $offset = 0, int $limit = 50): Collection
   {
-    $model = new static();
+    $query = self::builder()
+      ->where($where)
+      ->offset($offset)
+      ->limit($limit);
 
-    $query = new QueryBuilder();
-    $query->where($where);
+    if ($order !== NULL) {
+      foreach ($order as $k => $v) {
+        $query->order($k, $v);
+      }
+    }
 
     /**
      * Handle scopes.
      */
+    $model = new static();
     if (!empty($model->_scopes)) {
       foreach ($model->_scopes as $scopeName => $scope) {
         $query->where($scope);
       }
     }
 
-    /**
-     * Query the database.
-     */
-    $items = Db::findAll($model->table, $query->build(), $order, $offset, $limit);
-
-    /**
-     * Instantiate the final objects.
-     */
-    $collection = new Collection();
-    foreach ($items as $item) {
-      $collection->add(new static($item));
-    }
-    return $collection;
+    return $query->get();
   }
 
   public static function findFirst($where = null): Model
@@ -120,13 +144,14 @@ abstract class Model extends AbstractModel
     }
 
     $model = new static();
-    $data = Db::findOne($model->table, $model->primary_key, $id);
+    $data = self::where($model->primary_key, '=', $id)
+      ->first();
 
     if (empty($data)) {
       throw new ModelNotFoundException('Model not found!');
     }
 
-    return new static($data);
+    return $data;
   }
 
   public static function create(array $data): Model

@@ -4,8 +4,7 @@ namespace Pachyderm\Orm;
 
 class QueryBuilder
 {
-
-    protected $model = NULL;
+    protected $_table = NULL;
     protected $filters = array();
 
     public function __construct($serialized = NULL)
@@ -13,6 +12,14 @@ class QueryBuilder
         if ($serialized !== NULL) {
             $this->filters = (array)json_decode(base64_decode($serialized), TRUE);
         }
+    }
+
+    /**
+     * Prepend the table name.
+     */
+    public function prepend($table)
+    {
+        $this->_table = $table;
     }
 
     private function append($operator, $filter)
@@ -50,6 +57,10 @@ class QueryBuilder
             return $this;
         }
 
+        if ($this->_table !== NULL && strpos($field, '.') === false) {
+            $field = $this->_table . '.' . $field;
+        }
+
         if ($value === NULL && $operator !== NULL) {
             $this->append($globalOperator, [$operator => [$field]]);
             return $this;
@@ -78,18 +89,6 @@ class QueryBuilder
     public function serialize()
     {
         return base64_encode(json_encode($this->filters));
-    }
-
-    public function setModel($classname)
-    {
-        $this->model = $classname;
-    }
-
-    public function get()
-    {
-        $model = $this->model;
-        // @FIXME: Remove offset and limit
-        return $model::findAll($this, NULL, 0, 1000000);
     }
 }
 /*
