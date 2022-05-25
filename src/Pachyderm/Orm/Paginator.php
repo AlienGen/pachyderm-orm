@@ -2,6 +2,9 @@
 
 namespace Pachyderm\Orm;
 
+/**
+ * @deprecated
+ */
 class Paginator
 {
 

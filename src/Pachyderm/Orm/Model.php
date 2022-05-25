@@ -147,7 +147,17 @@ abstract class Model extends AbstractModel
 
   public static function builder(): SQLBuilder
   {
-    return new SQLBuilder(new static());
+    $model = new static();
+
+    $builder = new SQLBuilder($model);
+    $parent = $model->_getInherit();
+    if ($parent !== NULL) {
+      $parentBuilder = $parent::builder()
+        ->select($parent->getFields());
+      $builder->join($parentBuilder, $parent->primary_key, $model->primary_key);
+    }
+
+    return $builder;
   }
 
   public static function where($field, $operator, $value): SQLBuilder
@@ -208,6 +218,64 @@ abstract class Model extends AbstractModel
     return $query->get();
   }
 
+  public static function pagination(array $params): SQLBuilder
+  {
+    $offset = 0;
+    $limit = 50;
+
+    if (!empty($params['page']) && !empty($params['size'])) {
+      $offset = ($params['page'] - 1) * $params['size'];
+      $limit = $params['size'];
+    }
+    unset($params['page']);
+    unset($params['size']);
+
+    $builder = self::builder()
+      ->offset($offset)
+      ->limit($limit);
+
+    if (!empty($params['order'])) {
+      $orders = is_array($params['order']) ? $params['order'] : [$params['order']];
+
+      foreach ($orders as $order) {
+        $raw = explode(',', $order);
+        $builder->order($raw[0], $raw[1] ?? 'ASC');
+      }
+    }
+    unset($params['order']);
+
+    if (!empty($params['filter'])) {
+      $query = new QueryBuilder($params['filter']);
+      $builder->where($query);
+      unset($params['filter']);
+    }
+
+    $model = new static();
+    $parent = $model->_getInherit();
+    $parentFields = [];
+    if ($parent !== NULL) {
+      foreach ($parent->getFields() as $f) {
+        $parentFields[$f] = $parent->table;
+      }
+    }
+
+    /**
+     * @deprecated
+     */
+    foreach ($params as $k => $v) {
+      // Prefix the field if it belongs to another table.
+      if (!empty($parentFields[$k])) {
+        $k = $parentFields[$k] . '.' . $k;
+      }
+      $builder->where($k, '=', $v);
+    }
+
+    return $builder;
+  }
+
+  /**
+   * @deprecated
+   */
   public static function paginate(Paginator $paginator): Collection
   {
     return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());

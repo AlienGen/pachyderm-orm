@@ -4,9 +4,9 @@ namespace Pachyderm\Orm;
 
 abstract class AbstractModel implements \ArrayAccess
 {
-    public string $deleted_at = null;
-    public string $updated_at = null;
-    public string $created_at = null;
+    public null|string $deleted_at = null;
+    public null|string $updated_at = null;
+    public null|string $created_at = null;
     protected array $_fields = array();
     protected array $_data = array();
 
