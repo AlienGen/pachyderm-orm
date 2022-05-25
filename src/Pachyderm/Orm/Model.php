@@ -152,8 +152,19 @@ abstract class Model extends AbstractModel
     $builder = new SQLBuilder($model);
     $parent = $model->_getInherit();
     if ($parent !== NULL) {
+      // Isolate fields
+      $fields = [];
+      foreach ($parent->getFields() as $f) {
+        if (is_string($f)) {
+          $fields[] = $f;
+        }
+      }
+
+      // Prepare the query.
       $parentBuilder = $parent::builder()
-        ->select($parent->getFields());
+        ->select($fields);
+
+      // Join the table.
       $builder->join($parentBuilder, $parent->primary_key, $model->primary_key);
     }
 

@@ -40,6 +40,12 @@ class SQLBuilder
     public function select(...$fields): SQLBuilder
     {
         foreach ($fields as $f) {
+            if (is_array($f)) {
+                foreach ($f as $f2) {
+                    $this->_fields[$f2] = $this->_table . '.' . $f2;
+                }
+                continue;
+            }
             $this->_fields[$f] = $this->_table . '.' . $f;
         }
         return $this;
