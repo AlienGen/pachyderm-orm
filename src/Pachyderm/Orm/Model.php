@@ -21,7 +21,7 @@ abstract class Model extends AbstractModel
     }
   }
 
-  private function _execute_hook(string $hook, mixed $data = NULL)
+  private function _execute_hook(string $hook, mixed $data = NULL): mixed
   {
     if (method_exists($this, $hook)) {
       return $this->$hook($data);
@@ -29,7 +29,7 @@ abstract class Model extends AbstractModel
     return $data;
   }
 
-  private function _getInherit()
+  private function _getInherit(): null|Model
   {
     if (!isset($this->inherit)) {
       return NULL;
@@ -67,15 +67,53 @@ abstract class Model extends AbstractModel
   {
     $where = $this->_build_where();
     $data = $this->_execute_hook('pre_update', $this->_data);
+
+    /**
+     * Save the parent if the model is an inheritance.
+     */
+    $parent = $this->_getInherit();
+    if ($parent !== NULL) {
+      $p = $parent::find($data[$parent->primary_key]);
+
+      // Set the values of the fields for the parents.
+      $fields = $parent->getFields();
+      foreach ($fields as $f) {
+        if (is_string($f)) {
+          $p->$f = $data[$f];
+          unset($data[$f]);
+        }
+      }
+
+      $p->save();
+    }
+
     Db::update($this->table, $data, $where);
+
     $this->_execute_hook('post_update');
+
+    // Refresh the entity.
+    $newValues = $this->find($this->getId());
+    $this->set($newValues->_data);
   }
 
   public function delete(): void
   {
     $where = $this->_build_where();
     $this->_execute_hook('pre_delete');
+
     Db::delete($this->table, $this->primary_key, $where);
+
+    /**
+     * Delete the parent if the model had an inheritance.
+     */
+    $parent = $this->_getInherit();
+    if ($parent !== NULL) {
+      $pk = $parent->primary_key;
+      $p = $parent::find($this->$pk);
+
+      $p->delete();
+    }
+
     $this->_execute_hook('post_delete');
   }
 
@@ -128,11 +166,17 @@ abstract class Model extends AbstractModel
 
     $id = Db::insert($model->table, $data);
 
+    // In case of a relation table, no id is returned, we recompose the id from the primary keys.
     if (is_array($model->primary_key)) {
       $id = array();
       foreach ($model->primary_key as $pk) {
         $id[] = $data[$pk];
       }
+    }
+
+    // In case of a children table, no id is returned, we take the "supposed" value of the key.
+    if ($parent !== NULL) {
+      $id = $data[$model->primary_key];
     }
 
     if (!$id) {
@@ -300,16 +344,25 @@ abstract class Model extends AbstractModel
     return self::findAll($where, null, 0, 1)->first();
   }
 
-  public static function find($id): Model
+  public static function find(string|array $id): Model
   {
     if (empty($id)) {
       throw new ModelNotFoundException('Model ' . get_called_class() . ' with id=' . $id . ' not found!');
     }
 
     $model = new static();
-    $data = self::where($model->primary_key, '=', $id)
-      ->first();
+    $builder = self::builder();
 
+    // Handle multiple primary keys.
+    if (is_array($model->primary_key)) {
+      foreach ($model->primary_key as $index => $pk) {
+        $builder->where($pk, '=', $id[$index]);
+      }
+    } else {
+      $builder->where($model->primary_key, '=', $id);
+    }
+
+    $data = $builder->first();
     if (empty($data)) {
       throw new ModelNotFoundException('Model not found!');
     }

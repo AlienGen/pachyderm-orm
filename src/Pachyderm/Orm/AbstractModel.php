@@ -95,6 +95,20 @@ abstract class AbstractModel implements \ArrayAccess
 
     public function getId(): string
     {
+        if (empty($this->primary_key)) {
+            throw new \Exception('The property "primary_key" must be defined!');
+        }
+
+        // If the primary key is multiple
+        if (is_array($this->primary_key)) {
+            $id = array();
+            foreach ($this->primary_key as $pk) {
+                $id[] = $this->_data[$pk];
+            }
+            return $id;
+        }
+
+        // Single primary key.
         return $this->_data[$this->primary_key];
     }
 
