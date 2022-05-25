@@ -4,10 +4,11 @@ namespace Pachyderm\Orm;
 
 abstract class AbstractModel implements \ArrayAccess
 {
-    public $deleted_at = null;
-    public $updated_at = null;
-    public $created_at = null;
-    protected $_data = array();
+    public string $deleted_at = null;
+    public string $updated_at = null;
+    public string $created_at = null;
+    protected array $_fields = array();
+    protected array $_data = array();
 
     /**
      * Magic getter to get the value of a field.
@@ -63,7 +64,7 @@ abstract class AbstractModel implements \ArrayAccess
     /**
      * Array like getter
      */
-    public function offsetGet($key)
+    public function offsetGet($key): mixed
     {
         return $this->_data[$key];
     }
@@ -75,6 +76,14 @@ abstract class AbstractModel implements \ArrayAccess
     public function __construct(array $data = array())
     {
         $this->set($data);
+    }
+
+    public function getFields(): array
+    {
+        if (empty($this->_fields)) {
+            throw new \Exception('The array property "_fields" must be defined!');
+        }
+        return $this->_fields;
     }
 
     public function set(array $data = array()): void

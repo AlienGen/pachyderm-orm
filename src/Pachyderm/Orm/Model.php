@@ -17,16 +17,29 @@ abstract class Model extends AbstractModel
     }
 
     if (empty($this->primary_key)) {
-      throw new \Exception('Property "table" must be set on model ' . get_called_class());
+      throw new \Exception('Property "primary_key" must be set on model ' . get_called_class());
     }
   }
 
-  private function _execute_hook(string $hook, $data = NULL)
+  private function _execute_hook(string $hook, mixed $data = NULL)
   {
     if (method_exists($this, $hook)) {
       return $this->$hook($data);
     }
     return $data;
+  }
+
+  private function _getInherit()
+  {
+    if (!isset($this->inherit)) {
+      return NULL;
+    }
+    $parent = $this->inherit;
+    $p = new $parent();
+    if (!$p instanceof Model) {
+      throw new \Exception('"inherit" property must be a Model instance!');
+    }
+    return $p;
   }
 
   private function _build_where(): array
@@ -76,14 +89,65 @@ abstract class Model extends AbstractModel
    * Static methods
    *
    */
+  public static function create(array $data): Model
+  {
+    $model = new static();
+
+    // TODO: Avoid doing that
+    unset($data['created_at']);
+
+    // Remove primary_key from the data if the model is not a relation table.
+    if (!is_array($model->primary_key)) {
+      unset($data[$model->primary_key]);
+    }
+
+    /**
+     * Call hook.
+     */
+    $data = $model->_execute_hook('pre_create', $data);
+
+    /**
+     * Create parent if the model is an inheritance.
+     */
+    $parent = $model->_getInherit();
+    if ($parent !== NULL) {
+      // Insert the fields for the parents.
+      $fields = $parent->getFields();
+      $parentData = [];
+      foreach ($fields as $f) {
+        if (is_string($f)) {
+          $parentData[$f] = $data[$f];
+          unset($data[$f]);
+        }
+      }
+      $p = $parent::create($parentData);
+
+      // Set the primary key with the parent field.
+      $data[$model->primary_key] = $p->getId();
+    }
+
+    $id = Db::insert($model->table, $data);
+
+    if (is_array($model->primary_key)) {
+      $id = array();
+      foreach ($model->primary_key as $pk) {
+        $id[] = $data[$pk];
+      }
+    }
+
+    if (!$id) {
+      throw new \Exception('Unable to create the entity!');
+    }
+
+    // Fetch the entity from the database.
+    $entity = static::find($id);
+
+    return $model->_execute_hook('post_create', $entity);
+  }
+
   public static function builder(): SQLBuilder
   {
     return new SQLBuilder(new static());
-  }
-
-  public static function paginate(Paginator $paginator): Collection
-  {
-    return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
   }
 
   public static function where($field, $operator, $value): SQLBuilder
@@ -144,6 +208,11 @@ abstract class Model extends AbstractModel
     return $query->get();
   }
 
+  public static function paginate(Paginator $paginator): Collection
+  {
+    return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
+  }
+
   public static function findFirst($where = null): Model
   {
     return self::findAll($where, null, 0, 1)->first();
@@ -164,32 +233,5 @@ abstract class Model extends AbstractModel
     }
 
     return $data;
-  }
-
-  public static function create(array $data): Model
-  {
-    $model = new static();
-
-    unset($data['created_at']);
-
-    if (!is_array($model->primary_key)) {
-      unset($data[$model->primary_key]);
-    }
-
-    $data = $model->_execute_hook('pre_create', $data);
-    $id = Db::insert($model->table, $data);
-    $model->_execute_hook('post_create');
-
-    if (is_array($model->primary_key)) {
-      $id = array();
-      foreach ($model->primary_key as $pk) {
-        $id[] = $data[$pk];
-      }
-    }
-
-    if (!$id) {
-      throw new \Exception('Unable to create the entity!');
-    }
-    return static::find($id);
   }
 }
