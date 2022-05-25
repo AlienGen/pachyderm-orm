@@ -2,20 +2,29 @@
 
 namespace Pachyderm\Orm\Helper;
 
+use Pachyderm\Dispatcher;
 use Pachyderm\Orm\Model;
 
 class CRUDRoute
 {
     protected static $dispatcher = NULL;
 
-    public static function init($dispatcher)
+    public static function init(Dispatcher $dispatcher): void
     {
         self::$dispatcher = $dispatcher;
     }
 
-    public static function route($name, Model $model, $prefix = '/')
+    public static function route(string $name, string $model, string $prefix = '/'): void
     {
-        $plural = self::plural($name);
+        if (self::$dispatcher === NULL) {
+            throw new \Exception('CRUDRoute must be initialized!');
+        }
+
+        if (!is_subclass_of($model, Model::class)) {
+            throw new \Exception('"model" parameter must be a Model class!');
+        }
+
+        $plural = self::pluralize($name);
 
         /**
          * Listing
@@ -61,8 +70,15 @@ class CRUDRoute
         });
     }
 
-    private static function plural($name)
+    private static function pluralize($name): string
     {
-        return $name;
+        $last_letter = strtolower($name[strlen($name) - 1]);
+        if ($last_letter == 's') {
+            return $name . 'es';
+        }
+        if ($last_letter == 'y') {
+            return substr($name, 0, -1) . 'ies';
+        }
+        return $name . 's';
     }
 }
