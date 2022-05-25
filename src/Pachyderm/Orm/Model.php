@@ -270,14 +270,17 @@ abstract class Model extends AbstractModel
       }
     }
 
-    /**
-     * @deprecated
-     */
     foreach ($params as $k => $v) {
       // Prefix the field if it belongs to another table.
       if (!empty($parentFields[$k])) {
         $k = $parentFields[$k] . '.' . $k;
       }
+
+      if ($v == 'NULL') {
+        $builder->where($k, 'IS NULL');
+        continue;
+      }
+
       $builder->where($k, '=', $v);
     }
 
