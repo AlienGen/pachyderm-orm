@@ -344,7 +344,7 @@ abstract class Model extends AbstractModel
     return self::findAll($paginator->filters(), $paginator->order(), $paginator->offset(), $paginator->limit());
   }
 
-  public static function findFirst($where = null): Model
+  public static function findFirst($where = null): null|Model
   {
     return self::findAll($where, null, 0, 1)->first();
   }

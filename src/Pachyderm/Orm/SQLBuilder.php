@@ -158,7 +158,7 @@ class SQLBuilder
     /**
      * Execute the query and return the first model.
      */
-    public function first(): Model
+    public function first(): null|Model
     {
         return $this
             ->offset(0)
