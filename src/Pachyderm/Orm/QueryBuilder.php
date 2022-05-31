@@ -52,7 +52,7 @@ class QueryBuilder
             return $this;
         }
 
-        if (is_callable($field)) {
+        if (!is_string($field) && is_callable($field)) {
             $field($this);
             return $this;
         }
