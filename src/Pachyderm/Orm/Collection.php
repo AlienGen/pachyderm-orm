@@ -54,7 +54,7 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
     $this->_data[] = $m;
   }
 
-  public function first(): null|mixed
+  public function first(): null|AbstractModel
   {
     if (empty($this->_data[0])) {
       return null;
@@ -67,7 +67,7 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
     return count($this->_data);
   }
 
-  public function current(): null|mixed
+  public function current(): null|AbstractModel
   {
     return current($this->_data);
   }
