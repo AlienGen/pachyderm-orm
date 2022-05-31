@@ -77,7 +77,7 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
     next($this->_data);
   }
 
-  public function key(): null|mixed
+  public function key(): null|string|int
   {
     return key($this->_data);
   }
