@@ -211,7 +211,7 @@ class SQLBuilder
 
         $fields = join(', ', $fieldsArray);
 
-        return 'SELECT ' . $fields . ' FROM ' . $this->_q($this->_table);
+        return 'SELECT SQL_CALC_FOUND_ROWS ' . $fields . ' FROM ' . $this->_q($this->_table);
     }
 
     /**

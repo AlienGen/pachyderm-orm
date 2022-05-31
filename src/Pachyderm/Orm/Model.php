@@ -235,11 +235,16 @@ abstract class Model extends AbstractModel
      * Query the database.
      */
     $results = Db::query($sql);
+    $rowCount = Db::query('SELECT FOUND_ROWS() AS total;');
+    $total_count = 0;
+    while ($row = $rowCount->fetch_assoc()) {
+      $total_count = $row['total'];
+    }
 
     /**
      * Instantiate the final objects.
      */
-    $collection = new Collection();
+    $collection = new Collection($total_count);
     while ($item = $results->fetch_assoc()) {
       $collection->add(new static($item));
     }

@@ -2,12 +2,19 @@
 
 namespace Pachyderm\Orm;
 
-class Collection implements \ArrayAccess
+class Collection implements \Iterator, \Countable, \ArrayAccess
 {
   protected $_data = array();
+  protected int $_total_record = 0;
 
-  public function __construct()
+  public function __construct(int $totalRecords = 0)
   {
+    $this->_total_record = $totalRecords;
+  }
+
+  public function totalRecords(): int
+  {
+    return $this->_total_record;
   }
 
   /**
@@ -53,6 +60,36 @@ class Collection implements \ArrayAccess
       return null;
     }
     return $this->_data[0];
+  }
+
+  public function count(): int
+  {
+    return count($this->_data);
+  }
+
+  public function current(): mixed
+  {
+    return current($this->_data);
+  }
+
+  public function next(): void
+  {
+    next($this->_data);
+  }
+
+  public function key(): mixed
+  {
+    return key($this->_data);
+  }
+
+  public function valid(): bool
+  {
+    return current($this->_data) != NULL;
+  }
+
+  public function rewind(): void
+  {
+    reset($this->_data);
   }
 
   /**
