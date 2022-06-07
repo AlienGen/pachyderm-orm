@@ -98,10 +98,19 @@ abstract class Model extends AbstractModel
 
   public function delete(): void
   {
-    $where = $this->_build_where();
     $this->_execute_hook('pre_delete');
 
-    Db::delete($this->table, $this->primary_key, $where);
+    $pk = $this->primary_key;
+    if (is_array($pk)) {
+      $id = [];
+      foreach ($pk as $k) {
+        $id[] = $this->$k;
+      }
+    } else {
+      $id = $this->$pk;
+    }
+
+    Db::delete($this->table, $pk, $id);
 
     /**
      * Delete the parent if the model had an inheritance.
