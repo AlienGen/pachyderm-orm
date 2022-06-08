@@ -361,7 +361,7 @@ abstract class Model extends AbstractModel
   public static function find(string|array $id): Model
   {
     if (empty($id)) {
-      throw new ModelNotFoundException('Model ' . get_called_class() . ' with id=' . $id . ' not found!');
+      throw new ModelNotFoundException('Calling "find" on model "' . get_called_class() . '" require an id not empty!');
     }
 
     $model = new static();
@@ -378,7 +378,7 @@ abstract class Model extends AbstractModel
 
     $data = $builder->first();
     if (empty($data)) {
-      throw new ModelNotFoundException('Model not found!');
+      throw new ModelNotFoundException('Model "' . get_called_class() . '" with id=' . $id . ' not found!');
     }
 
     return $data;
