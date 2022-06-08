@@ -22,6 +22,9 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
    */
   public function offsetSet($key, $value): void
   {
+    if (!$value instanceof AbstractModel) {
+      throw new \Error('Unable to add other type to a collection!');
+    }
     $this->_data[$key] = $value;
   }
 
