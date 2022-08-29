@@ -65,6 +65,15 @@ abstract class Model extends AbstractModel
 
   public function save(): void
   {
+    /**
+     * If the object doesn't exists, we create it instead of saving it.
+     */
+    if ($this->getId() === NULL) {
+      $newModel = self::create($this->_data);
+      $this->set($newModel->_data);
+      return;
+    }
+
     $where = $this->_build_where();
     $data = $this->_execute_hook('pre_update', $this->_data);
 

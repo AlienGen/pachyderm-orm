@@ -93,7 +93,7 @@ abstract class AbstractModel implements \ArrayAccess
         }
     }
 
-    public function getId(): string|array
+    public function getId(): string|array|null
     {
         if (empty($this->primary_key)) {
             throw new \Exception('The property "primary_key" must be defined!');
@@ -103,9 +103,16 @@ abstract class AbstractModel implements \ArrayAccess
         if (is_array($this->primary_key)) {
             $id = array();
             foreach ($this->primary_key as $pk) {
+                if (!isset($this->_data[$pk])) {
+                    return NULL;
+                }
                 $id[] = $this->_data[$pk];
             }
             return $id;
+        }
+
+        if (!isset($this->_data[$this->primary_key])) {
+            return NULL;
         }
 
         // Single primary key.
