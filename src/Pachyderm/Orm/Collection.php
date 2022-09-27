@@ -47,7 +47,7 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
   /**
    * Array like getter
    */
-  public function offsetGet($key)
+  public function offsetGet($key): mixed
   {
     return $this->_data[$key];
   }
