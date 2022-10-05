@@ -29,9 +29,9 @@ class CRUDRoute
         /**
          * Listing
          */
-        self::$dispatcher->get($prefix . $plural, function () use ($model, $plural) {
-            $entities = $model::pagination($_GET);
-            return [200, ['success' => true, $plural => $entities]];
+        self::$dispatcher->get($prefix . $plural, function () use ($model) {
+            $entities = $model::pagination($_GET)->get();
+            return [200, ['success' => true, 'items' => $entities, 'total' => $entities->totalRecords()]];
         });
 
         /**
