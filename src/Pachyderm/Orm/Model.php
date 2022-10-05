@@ -241,12 +241,34 @@ abstract class Model extends AbstractModel
 
   public static function query(SQLBuilder $builder): Collection
   {
+    /**
+     * Handle scopes.
+     */
+    $model = new static();
+    if (!empty($model->_scopes)) {
+      foreach ($model->_scopes as $scopeName => $scope) {
+        $builder->where($scope);
+      }
+    }
+
     $sql = $builder->build();
     $values = $builder->values();
 
     // TODO: Replace with PDO later.
     foreach ($values as $key => $value) {
-      $sql = str_replace(':' . $key, '"' . Db::escape($value) . '"', $sql);
+      if (is_array($value)) {
+        $list = [];
+        foreach ($value as $v) {
+          $list[] = Db::escape($v);
+        }
+        $safeValue = '(' . join(',', $list) . ')';
+        if (empty($list)) {
+          $safeValue = '(FALSE)';
+        }
+      } else {
+        $safeValue = '"' . Db::escape($value) . '"';
+      }
+      $sql = str_replace(':' . $key, $safeValue, $sql);
     }
 
     /**
@@ -280,16 +302,6 @@ abstract class Model extends AbstractModel
     if ($order !== NULL) {
       foreach ($order as $k => $v) {
         $query->order($k, $v);
-      }
-    }
-
-    /**
-     * Handle scopes.
-     */
-    $model = new static();
-    if (!empty($model->_scopes)) {
-      foreach ($model->_scopes as $scopeName => $scope) {
-        $query->where($scope);
       }
     }
 
