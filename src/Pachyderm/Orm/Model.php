@@ -212,6 +212,10 @@ abstract class Model extends AbstractModel
     $model = new static();
 
     $builder = new SQLBuilder($model);
+
+    /**
+     * Manage inheritance
+     */
     $parent = $model->_getInherit();
     if ($parent !== NULL) {
       // Isolate fields
@@ -230,6 +234,16 @@ abstract class Model extends AbstractModel
       $builder->join($parentBuilder, $parent->primary_key, $model->primary_key);
     }
 
+    /**
+     * Handle scopes.
+     */
+    $scopes = $model->_scopes;
+    if (is_array($scopes)) {
+      foreach ($scopes as $scopeName => $scope) {
+        $builder->where($scope);
+      }
+    }
+
     return $builder;
   }
 
@@ -241,16 +255,6 @@ abstract class Model extends AbstractModel
 
   public static function query(SQLBuilder $builder): Collection
   {
-    /**
-     * Handle scopes.
-     */
-    $model = new static();
-    if (!empty($model->_scopes)) {
-      foreach ($model->_scopes as $scopeName => $scope) {
-        $builder->where($scope);
-      }
-    }
-
     $sql = $builder->build();
     $values = $builder->values();
 
