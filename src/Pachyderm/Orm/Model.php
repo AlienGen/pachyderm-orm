@@ -247,7 +247,7 @@ abstract class Model extends AbstractModel
     return $builder;
   }
 
-  public static function where($field, $operator, $value): SQLBuilder
+  public static function where($field, $operator = NULL, $value = NULL): SQLBuilder
   {
     return self::builder()
       ->where($field, $operator, $value);
