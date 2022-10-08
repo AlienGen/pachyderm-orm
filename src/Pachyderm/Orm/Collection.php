@@ -57,6 +57,13 @@ class Collection implements \Iterator, \Countable, \ArrayAccess
     $this->_data[] = $m;
   }
 
+  public function addAll(Collection $c): void
+  {
+    foreach ($c as $m) {
+      $this->add($m);
+    }
+  }
+
   public function first(): null|AbstractModel
   {
     if (empty($this->_data[0])) {
