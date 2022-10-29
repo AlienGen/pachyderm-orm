@@ -66,15 +66,11 @@ class Collection extends IterableObjectSet
     }
 
     /**
-     * @deprecated The collection is iterable
+     * @deprecated The collection is iterable.
      */
     public function toArray(): array
     {
-        $array = array();
-        foreach ($this->_data as $m) {
-            $array[] = $m->toArray();
-        }
-        return $array;
+        return $this->jsonSerialize();
     }
 
     /**

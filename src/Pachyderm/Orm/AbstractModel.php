@@ -9,6 +9,10 @@ abstract class AbstractModel extends IterableObjectSet
     public null|string $deleted_at = null;
     public null|string $updated_at = null;
     public null|string $created_at = null;
+
+    /**
+     * Overridable set to specify the fields during the inheritance.
+     */
     protected array $_fields = array();
 
     /**
@@ -62,10 +66,16 @@ abstract class AbstractModel extends IterableObjectSet
     }
 
     /**
+     * Overridable method to add more "virtual" items in the set.
      * @deprecated The model is iterable.
      */
     public function toArray(): array
     {
         return $this->_data;
+    }
+
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }
