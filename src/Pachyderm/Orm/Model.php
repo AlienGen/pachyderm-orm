@@ -19,6 +19,11 @@ abstract class Model extends AbstractModel
         if (empty($this->primary_key)) {
             throw new \Exception('Property "primary_key" must be set on model ' . get_called_class());
         }
+
+        $bootMethod = 'boot';
+        if (method_exists($this, $bootMethod)) {
+            $this->$bootMethod();
+        }
     }
 
     private function _execute_hook(string $hook, mixed $data = NULL): mixed
@@ -101,8 +106,12 @@ abstract class Model extends AbstractModel
         $this->_execute_hook('post_update');
 
         // Refresh the entity.
-        $newValues = $this->find($this->getId());
-        $this->set($newValues->_data);
+        try {
+            $newValues = $this->find($this->getId());
+            $this->set($newValues->_data);
+        } catch (ModelNotFoundException $model) {
+            // Model has been deleted, or is unable to be found.
+        }
     }
 
     public function delete(): void
@@ -403,7 +412,8 @@ abstract class Model extends AbstractModel
 
         $data = $builder->first();
         if (empty($data)) {
-            throw new ModelNotFoundException('Model "' . get_called_class() . '" with id=' . $id . ' not found!');
+            $id = is_array($id) ? $id : [$id];
+            throw new ModelNotFoundException('Model "' . get_called_class() . '" with id=' . join(',', $id) . ' not found!');
         }
 
         return $data;
