@@ -10,13 +10,12 @@ abstract class AbstractModel extends IterableObjectSet
     public null|string $updated_at = null;
     public null|string $created_at = null;
     protected array $_fields = array();
-    protected array $_data = array();
 
     /**
      * Account constructor.
      * @param $data array
      */
-    public function __construct(array $data = array())
+    public function __construct(iterable $data = array())
     {
         $this->set($data);
     }
@@ -29,14 +28,14 @@ abstract class AbstractModel extends IterableObjectSet
         return $this->_fields;
     }
 
-    public function set(array $data = array()): void
+    public function set(iterable $data = array()): void
     {
         foreach ($data as $k => $v) {
             $this->$k = $v;
         }
     }
 
-    public function getId(): string|array|null
+    public function getId(): string|iterable|null
     {
         if (empty($this->primary_key)) {
             throw new \Exception('The property "primary_key" must be defined!');
