@@ -348,11 +348,18 @@ abstract class Model extends AbstractModel
         unset($params['order']);
 
         if (!empty($params['filter'])) {
-            $query = new QueryBuilder($params['filter']);
+            $conditions = json_decode($params['filter']);
+            $query = new QueryBuilder();
+            foreach ($conditions as $condition) {
+                if ($condition->operator == 'like') {
+                    $query->where($condition->field, $condition->operator, '%' . $condition->value . '%');
+                } else {
+                    $query->where($condition->field, $condition->operator, $condition->value);
+                }
+            }
             $builder->where($query);
             unset($params['filter']);
         }
-
         $model = new static();
         $parent = $model->_getInherit();
         $parentFields = [];
