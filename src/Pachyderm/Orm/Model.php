@@ -348,8 +348,10 @@ abstract class Model extends AbstractModel
         unset($params['order']);
 
         if (!empty($params['filter'])) {
-            $query = new QueryBuilder($params['filter']);
-            $builder->where($query);
+            if ($params['filter'] != 'W10=') {
+                $query = new QueryBuilder($params['filter']);
+                $builder->where($query);
+            }
             unset($params['filter']);
         }
 
