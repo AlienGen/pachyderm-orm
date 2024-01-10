@@ -55,10 +55,8 @@ class Paginator
     unset($params['order']);
 
     if (!empty($params['filter'])) {
-      if ($params['filter'] != 'W10=') {
-        $query = new QueryBuilder($params['filter']);
-        $this->filters->where($query);
-      }
+      $query = new QueryBuilder($params['filter']);
+      $this->filters->where($query);
       unset($params['filter']);
     }
 

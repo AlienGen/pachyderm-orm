@@ -43,6 +43,7 @@ class QueryBuilder
         }
 
         if ($field instanceof QueryBuilder) {
+            if (empty($field->build())) return $this;
             $this->append($globalOperator, $field->build());
             return $this;
         }
