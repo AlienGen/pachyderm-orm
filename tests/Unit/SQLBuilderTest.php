@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Pachyderm\Orm\QueryBuilder;
 use Pachyderm\Orm\SQLBuilder;
 use PHPUnit\Framework\TestCase;
 
@@ -14,7 +13,7 @@ class SQLBuilderTest extends TestCase
         $sql = $sqlBuilder->build();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.* FROM `table`', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.* FROM `table`', $sql);
     }
 
     public function testBuildBasicFetch2FieldsSQLQuery(): void
@@ -24,7 +23,7 @@ class SQLBuilderTest extends TestCase
         $sql = $sqlBuilder->build();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.`column_1`, `table`.`column_2` FROM `table`', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.`column_1`, `table`.`column_2` FROM `table`', $sql);
     }
 
     public function testBuildBasicFetchSQLQuery(): void
@@ -36,7 +35,7 @@ class SQLBuilderTest extends TestCase
         $values = $sqlBuilder->values();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.* FROM `table` WHERE `table`.`key_id` = :value1', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.* FROM `table` WHERE `table`.`key_id` = :value1', $sql);
         $this->assertNotEmpty($values);
         $this->assertArrayHasKey('value1', $values);
         $this->assertEquals(1, $values['value1']);
@@ -52,7 +51,7 @@ class SQLBuilderTest extends TestCase
         $values = $sqlBuilder->values();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.* FROM `table` WHERE (`table`.`key_id` = :value1 AND `table`.`param_2` = :value2)', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.* FROM `table` WHERE (`table`.`key_id` = :value1 AND `table`.`param_2` = :value2)', $sql);
         $this->assertNotEmpty($values);
         $this->assertArrayHasKey('value1', $values);
         $this->assertEquals(1, $values['value1']);
@@ -70,7 +69,7 @@ class SQLBuilderTest extends TestCase
         $values = $sqlBuilder->values();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.* FROM `table` INNER JOIN `table2` ON `table2`.`field_id` = `table`.`field_id` WHERE `table`.`key_id` = :value1', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.* FROM `table` INNER JOIN `table2` ON `table2`.`field_id` = `table`.`field_id` WHERE `table`.`key_id` = :value1', $sql);
         $this->assertNotEmpty($values);
         $this->assertArrayHasKey('value1', $values);
         $this->assertEquals(1, $values['value1']);
@@ -86,7 +85,7 @@ class SQLBuilderTest extends TestCase
         $values = $sqlBuilder->values();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.* FROM `table` INNER JOIN `table2` ON `table2`.`field_id` = `table`.`key_id` WHERE `table2`.`key_id` = :value1', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.* FROM `table` INNER JOIN `table2` ON `table2`.`field_id` = `table`.`key_id` WHERE `table2`.`key_id` = :value1', $sql);
         $this->assertNotEmpty($values);
         $this->assertArrayHasKey('value1', $values);
         $this->assertEquals(1, $values['value1']);
@@ -109,7 +108,7 @@ class SQLBuilderTest extends TestCase
         $values = $sqlBuilder->values();
 
         $this->assertNotEmpty($sql);
-        $this->assertEquals('SELECT `table`.*, `table2`.`column_1`, `table2`.`column_2` FROM `table` INNER JOIN `table2` ON `table2`.`table2_id` = `table`.`parent_id` WHERE (`table`.`key_id` = :value1 AND `table2`.`key_id` = :value2)', $sql);
+        $this->assertEquals('SELECT SQL_CALC_FOUND_ROWS `table`.*, `table2`.`column_1`, `table2`.`column_2` FROM `table` INNER JOIN `table2` ON `table2`.`table2_id` = `table`.`parent_id` WHERE (`table`.`key_id` = :value1 AND `table2`.`key_id` = :value2)', $sql);
         $this->assertNotEmpty($values);
         $this->assertArrayHasKey('value1', $values);
         $this->assertEquals(1, $values['value1']);
