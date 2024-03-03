@@ -3,8 +3,8 @@
     "description": "A micro ORM for Pachyderm",
     "type": "library",
     "require": {
-        "php": ">=5.6.0",
-        "aliengen/pachyderm": ">=1.0"
+        "php": ">=8",
+        "aliengen/pachyderm": "dev-master"
     },
     "license": "MIT",
     "authors": [
@@ -16,7 +16,8 @@
     "autoload": {
         "psr-0": {
             "Pachyderm": "src/",
-            "Test": "tests/"
+            "Model": "tests/",
+            "Stub": "tests/"
         },
         "classmap": []
     },

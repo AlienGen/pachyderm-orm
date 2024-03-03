@@ -7,6 +7,7 @@ use \Pachyderm\Orm\Exception\ModelNotFoundException;
 
 abstract class Model extends AbstractModel
 {
+    private static $_dbEngine = Db::class;
     protected $_scopes = array();
 
     public function __construct(iterable $data = array())
@@ -101,7 +102,7 @@ abstract class Model extends AbstractModel
             $p->save();
         }
 
-        Db::update($this->table, $data, $where);
+        self::$_dbEngine::update($this->table, $data, $where);
 
         $this->_execute_hook('post_update');
 
@@ -128,7 +129,7 @@ abstract class Model extends AbstractModel
             $id = $this->$pk;
         }
 
-        Db::delete($this->table, $pk, $id);
+        self::$_dbEngine::delete($this->table, $pk, $id);
 
         /**
          * Delete the parent if the model had an inheritance.
@@ -191,7 +192,7 @@ abstract class Model extends AbstractModel
             $data[$model->primary_key] = $p->getId();
         }
 
-        $id = Db::insert($model->table, $data);
+        $id = self::$_dbEngine::insert($model->table, $data);
 
         // In case of a relation table, no id is returned, we recompose the id from the primary keys.
         if (is_array($model->primary_key)) {
@@ -272,14 +273,14 @@ abstract class Model extends AbstractModel
             if (is_array($value)) {
                 $list = [];
                 foreach ($value as $v) {
-                    $list[] = Db::escape($v);
+                    $list[] = self::$_dbEngine::escape($v);
                 }
                 $safeValue = '(' . join(',', $list) . ')';
                 if (empty($list)) {
                     $safeValue = '(FALSE)';
                 }
             } else {
-                $safeValue = '"' . Db::escape($value) . '"';
+                $safeValue = '"' . self::$_dbEngine::escape($value) . '"';
             }
             $sql = str_replace(':' . $key, $safeValue, $sql);
         }
@@ -287,10 +288,10 @@ abstract class Model extends AbstractModel
         /**
          * Query the database.
          */
-        $results = Db::query($sql);
-        $rowCount = Db::query('SELECT FOUND_ROWS() AS total;');
+        $results = self::$_dbEngine::query($sql);
+        $rowCount = self::$_dbEngine::query('SELECT FOUND_ROWS() AS total;');
         $total_count = 0;
-        while ($row = $rowCount->fetch_assoc()) {
+        foreach ($rowCount AS $row) {
             $total_count = $row['total'];
         }
 
@@ -298,7 +299,7 @@ abstract class Model extends AbstractModel
          * Instantiate the final objects.
          */
         $collection = new Collection($total_count);
-        while ($item = $results->fetch_assoc()) {
+        foreach ($results AS $item) {
             $collection->add(new static($item));
         }
 
@@ -417,5 +418,9 @@ abstract class Model extends AbstractModel
         }
 
         return $data;
+    }
+
+    public static function setDbEngine($engine) {
+        self::$_dbEngine = $engine;
     }
 }
