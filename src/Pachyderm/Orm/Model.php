@@ -265,25 +265,7 @@ abstract class Model extends AbstractModel
 
     public static function query(SQLBuilder $builder): Collection
     {
-        $sql = $builder->build();
-        $values = $builder->values();
-
-        // TODO: Replace with PDO later.
-        foreach ($values as $key => $value) {
-            if (is_array($value)) {
-                $list = [];
-                foreach ($value as $v) {
-                    $list[] = self::$_dbEngine::escape($v);
-                }
-                $safeValue = '(' . join(',', $list) . ')';
-                if (empty($list)) {
-                    $safeValue = '(FALSE)';
-                }
-            } else {
-                $safeValue = '"' . self::$_dbEngine::escape($value) . '"';
-            }
-            $sql = str_replace(':' . $key, $safeValue, $sql);
-        }
+        $sql = $builder->toSQL(self::$_dbEngine);
 
         /**
          * Query the database.

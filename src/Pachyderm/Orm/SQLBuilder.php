@@ -2,6 +2,8 @@
 
 namespace Pachyderm\Orm;
 
+use Pachyderm\Db;
+
 class SQLBuilder
 {
     protected string $_table;
@@ -141,6 +143,31 @@ class SQLBuilder
     public function values(): array
     {
         return $this->_values;
+    }
+
+    /**
+     * Return the final SQL query using the DB engine.
+     */
+    public function toSQL($engine) {
+        $sql = $this->build();
+        $values = $this->values();
+
+        foreach ($values as $key => $value) {
+            if (is_array($value)) {
+                $list = [];
+                foreach ($value as $v) {
+                    $list[] = $engine::escape($v);
+                }
+                $safeValue = '(' . join(',', $list) . ')';
+                if (empty($list)) {
+                    $safeValue = '(FALSE)';
+                }
+            } else {
+                $safeValue = '"' . $engine::escape($value) . '"';
+            }
+            $sql = str_replace(':' . $key, $safeValue, $sql);
+        }
+        return $sql;
     }
 
     /**
