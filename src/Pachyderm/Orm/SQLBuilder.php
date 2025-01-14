@@ -2,8 +2,6 @@
 
 namespace Pachyderm\Orm;
 
-use Pachyderm\Db;
-
 class SQLBuilder
 {
     protected string $_table;
@@ -156,7 +154,11 @@ class SQLBuilder
             if (is_array($value)) {
                 $list = [];
                 foreach ($value as $v) {
-                    $list[] = $engine::escape($v);
+                    $escapedValue = $engine::escape($v);
+                    if(!is_numeric($escapedValue) && is_string($escapedValue)) {
+                        $escapedValue = "'" . $escapedValue . "'";
+                    }
+                    $list[] = $escapedValue;
                 }
                 $safeValue = '(' . join(',', $list) . ')';
                 if (empty($list)) {
