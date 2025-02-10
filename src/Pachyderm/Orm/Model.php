@@ -217,7 +217,7 @@ abstract class Model extends AbstractModel
         return $model->_execute_hook('post_create', $entity);
     }
 
-    public static function builder(): SQLBuilder
+    public static function builder(bool $enableScopes = true): SQLBuilder
     {
         $model = new static();
 
@@ -227,7 +227,7 @@ abstract class Model extends AbstractModel
          * Manage inheritance
          */
         $parent = $model->_getInherit();
-        if ($parent !== NULL) {
+        if ($parent !== null) {
             // Isolate fields
             $fields = [];
             foreach ($parent->getFields() as $f) {
@@ -237,7 +237,7 @@ abstract class Model extends AbstractModel
             }
 
             // Prepare the query.
-            $parentBuilder = $parent::builder()
+            $parentBuilder = $parent::builder($enableScopes)
                 ->select($fields);
 
             // Join the table.
@@ -247,10 +247,12 @@ abstract class Model extends AbstractModel
         /**
          * Handle scopes.
          */
-        $scopes = $model->_scopes;
-        if (is_array($scopes)) {
-            foreach ($scopes as $scopeName => $scope) {
-                $builder->where($scope);
+        if ($enableScopes) {
+            $scopes = $model->_scopes;
+            if (is_array($scopes)) {
+                foreach ($scopes as $scopeName => $scope) {
+                    $builder->where($scope);
+                }
             }
         }
 
@@ -382,7 +384,7 @@ abstract class Model extends AbstractModel
         }
 
         $model = new static();
-        $builder = self::builder();
+        $builder = self::builder(false);
 
         // Handle multiple primary keys.
         if (is_array($model->primary_key)) {
