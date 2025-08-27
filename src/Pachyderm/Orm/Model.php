@@ -7,18 +7,18 @@ use \Pachyderm\Orm\Exception\ModelNotFoundException;
 
 abstract class Model extends AbstractModel
 {
-    private static $_dbEngine = Db::class;
-    protected $_scopes = array();
+    private static string $_dbEngine = Db::class;
+    protected array $_scopes = [];
 
-    public function __construct(iterable $data = array())
+    public function __construct(iterable $data = [])
     {
         parent::__construct($data);
         if (empty($this->table)) {
-            throw new \Exception('Property "table" must be set on model ' . get_called_class());
+            throw new \Exception('Property "table" must be set on model ' . static::class);
         }
 
         if (empty($this->primary_key)) {
-            throw new \Exception('Property "primary_key" must be set on model ' . get_called_class());
+            throw new \Exception('Property "primary_key" must be set on model ' . static::class);
         }
 
         $bootMethod = 'boot';
@@ -41,9 +41,12 @@ abstract class Model extends AbstractModel
             return NULL;
         }
         $parent = $this->inherit;
-        $p = new $parent();
+        if (is_string($parent)) {
+            $parent = new $parent();
+        }
+        $p = $parent;
         if (!$p instanceof Model) {
-            throw new \Exception('"inherit" property must be a Model instance!');
+            throw new \Exception('"inherit" property must be a Model instance or class-string!');
         }
         return $p;
     }
@@ -74,7 +77,7 @@ abstract class Model extends AbstractModel
         /**
          * If the object doesn't exists, we create it instead of saving it.
          */
-        if ($this->getId() === NULL) {
+        if ($this->getId() === null) {
             $newModel = self::create($this->_data);
             $this->set($newModel->_data);
             return;
@@ -87,19 +90,26 @@ abstract class Model extends AbstractModel
          * Save the parent if the model is an inheritance.
          */
         $parent = $this->_getInherit();
-        if ($parent !== NULL) {
-            $p = $parent::find($data[$parent->primary_key]);
+        if ($parent !== null) {
+            $parentModel = $parent::find($data[$parent->primary_key]);
 
             // Set the values of the fields for the parents.
             $fields = $parent->getFields();
             foreach ($fields as $f) {
-                if (is_string($f)) {
-                    $p->$f = $data[$f];
-                    unset($data[$f]);
+                if (!is_string($f)) {
+                    continue;
                 }
+
+                if (!isset($data[$f])) {
+                    $parentModel->$f = null;
+                    continue;
+                }
+
+                $parentModel->$f = $data[$f];
+                unset($data[$f]);
             }
 
-            $p->save();
+            $parentModel->save();
         }
 
         self::$_dbEngine::update($this->table, $data, $where);
@@ -135,7 +145,7 @@ abstract class Model extends AbstractModel
          * Delete the parent if the model had an inheritance.
          */
         $parent = $this->_getInherit();
-        if ($parent !== NULL) {
+        if ($parent !== null) {
             $pk = $parent->primary_key;
             $p = $parent::find($this->$pk);
 
@@ -145,7 +155,7 @@ abstract class Model extends AbstractModel
         $this->_execute_hook('post_delete');
     }
 
-    public function addScope(string $name, $scope = NULL): void
+    public function addScope(string $name, $scope = null): void
     {
         $this->_scopes[$name] = $scope;
     }
@@ -176,20 +186,27 @@ abstract class Model extends AbstractModel
          * Create parent if the model is an inheritance.
          */
         $parent = $model->_getInherit();
-        if ($parent !== NULL) {
+        if ($parent !== null) {
             // Insert the fields for the parents.
             $fields = $parent->getFields();
             $parentData = [];
             foreach ($fields as $f) {
-                if (is_string($f)) {
-                    $parentData[$f] = $data[$f];
-                    unset($data[$f]);
+                if (!is_string($f)) {
+                    continue;
                 }
+
+                if (!isset($data[$f])) {
+                    $parentData[$f] = null;
+                    continue;
+                }
+
+                $parentData[$f] = $data[$f];
+                unset($data[$f]);
             }
-            $p = $parent::create($parentData);
+            $parentModel = $parent::create($parentData);
 
             // Set the primary key with the parent field.
-            $data[$model->primary_key] = $p->getId();
+            $data[$model->primary_key] = $parentModel->getId();
         }
 
         $id = self::$_dbEngine::insert($model->table, $data);
@@ -203,7 +220,7 @@ abstract class Model extends AbstractModel
         }
 
         // In case of a children table, no id is returned, we take the "supposed" value of the key.
-        if ($parent !== NULL) {
+        if ($parent !== null) {
             $id = $data[$model->primary_key];
         }
 
@@ -231,9 +248,11 @@ abstract class Model extends AbstractModel
             // Isolate fields
             $fields = [];
             foreach ($parent->getFields() as $f) {
-                if (is_string($f)) {
-                    $fields[] = $f;
+                if (!is_string($f)) {
+                    continue;
                 }
+
+                $fields[] = $f;
             }
 
             // Prepare the query.
@@ -259,7 +278,7 @@ abstract class Model extends AbstractModel
         return $builder;
     }
 
-    public static function where($field, $operator = NULL, $value = NULL): SQLBuilder
+    public static function where($field, $operator = null, $value = null): SQLBuilder
     {
         return self::builder()
             ->where($field, $operator, $value);
@@ -353,7 +372,7 @@ abstract class Model extends AbstractModel
                 $k = $parentFields[$k] . '.' . $k;
             }
 
-            if ($v == 'NULL') {
+            if ($v === 'NULL') {
                 $builder->where($k, 'IS NULL');
                 continue;
             }
@@ -404,7 +423,8 @@ abstract class Model extends AbstractModel
         return $data;
     }
 
-    public static function setDbEngine($engine) {
+    public static function setDbEngine(string $engine): void
+    {
         self::$_dbEngine = $engine;
     }
 }

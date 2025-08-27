@@ -3,7 +3,6 @@ namespace Pachyderm\Orm\Traits;
 
 use Pachyderm\Orm\Collection;
 use Pachyderm\Orm\SQLBuilder;
-use Pachyderm\Service;
 
 class DeepDepthCounter
 {
