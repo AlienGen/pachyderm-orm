@@ -101,11 +101,12 @@ abstract class Model extends AbstractModel
                 }
 
                 if (!isset($data[$f])) {
-                    $parentModel->$f = null;
-                    continue;
+                    $data[$f] = null;
                 }
 
                 $parentModel->$f = $data[$f];
+
+                // This is to avoid the parent field to be saved in the child table.
                 unset($data[$f]);
             }
 
@@ -196,11 +197,12 @@ abstract class Model extends AbstractModel
                 }
 
                 if (!isset($data[$f])) {
-                    $parentData[$f] = null;
-                    continue;
+                    $data[$f] = null;
                 }
 
                 $parentData[$f] = $data[$f];
+
+                // This is to avoid the parent field to be saved in the child table.
                 unset($data[$f]);
             }
             $parentModel = $parent::create($parentData);
