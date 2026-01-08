@@ -76,7 +76,7 @@ class Collection extends IterableObjectSet
     /**
      * @deprecated
      */
-    public function toObject(string $pk = null): iterable
+    public function toObject(string|null $pk = null): iterable
     {
         $object = array();
         foreach ($this->_data as $m) {
