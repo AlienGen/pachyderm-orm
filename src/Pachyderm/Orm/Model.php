@@ -80,10 +80,12 @@ abstract class Model extends AbstractModel
         if ($this->getId() === null) {
             $newModel = self::create($this->_data);
             $this->set($newModel->_data);
+            $this->syncOriginal();
             return;
         }
 
         $where = $this->_build_where();
+        $changes = $this->getChanges();
         $data = $this->_execute_hook('pre_update', $this->_data);
 
         /**
@@ -115,12 +117,13 @@ abstract class Model extends AbstractModel
 
         self::$_dbEngine::update($this->table, $data, $where);
 
-        $this->_execute_hook('post_update');
+        $this->_execute_hook('post_update', $changes);
 
         // Refresh the entity.
         try {
             $newValues = $this->find($this->getId());
             $this->set($newValues->_data);
+            $this->syncOriginal();
         } catch (ModelNotFoundException $model) {
             // Model has been deleted, or is unable to be found.
         }
@@ -232,6 +235,7 @@ abstract class Model extends AbstractModel
 
         // Fetch the entity from the database.
         $entity = static::find($id);
+        $entity->syncOriginal();
 
         return $model->_execute_hook('post_create', $entity);
     }

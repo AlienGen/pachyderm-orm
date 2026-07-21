@@ -11,6 +11,12 @@ abstract class AbstractModel extends IterableObjectSet
     public null|string $created_at = null;
 
     /**
+     * Snapshot of last persisted attribute values for dirty tracking.
+     * @var array<string, mixed>
+     */
+    protected array $_original = [];
+
+    /**
      * Overridable set to specify the fields during the inheritance.
      */
     protected array $_fields = array();
@@ -22,6 +28,7 @@ abstract class AbstractModel extends IterableObjectSet
     public function __construct(iterable $data = array())
     {
         $this->set($data);
+        $this->syncOriginal();
     }
 
     public function getFields(): array
@@ -37,6 +44,54 @@ abstract class AbstractModel extends IterableObjectSet
         foreach ($data as $k => $v) {
             $this->$k = $v;
         }
+    }
+
+    /**
+     * Copy current attributes into the original snapshot.
+     */
+    public function syncOriginal(): void
+    {
+        $this->_original = $this->_data;
+    }
+
+    /**
+     * @return array<string, mixed>|mixed|null
+     */
+    public function getOriginal(?string $key = null): mixed
+    {
+        if ($key === null) {
+            return $this->_original;
+        }
+
+        return array_key_exists($key, $this->_original) ? $this->_original[$key] : null;
+    }
+
+    public function isDirty(?string $key = null): bool
+    {
+        if ($key !== null) {
+            $current = array_key_exists($key, $this->_data) ? $this->_data[$key] : null;
+            $original = array_key_exists($key, $this->_original) ? $this->_original[$key] : null;
+            return $current !== $original;
+        }
+
+        return $this->getChanges() !== [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getChanges(): array
+    {
+        $changes = [];
+        $keys = array_unique(array_merge(array_keys($this->_original), array_keys($this->_data)));
+        foreach ($keys as $key) {
+            $current = array_key_exists($key, $this->_data) ? $this->_data[$key] : null;
+            $original = array_key_exists($key, $this->_original) ? $this->_original[$key] : null;
+            if ($current !== $original) {
+                $changes[$key] = $current;
+            }
+        }
+        return $changes;
     }
 
     public function getId(): string|iterable|null
