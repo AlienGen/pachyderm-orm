@@ -21,7 +21,13 @@ final class PaginatorTest extends TestCase
 
     $paginator->parse($getParams);
 
-    // TODO: Complete test
     $this->assertNotEmpty($filters);
+  }
+
+  public function testParseRejectsInvalidOrderDirection(): void
+  {
+    $this->expectException(\InvalidArgumentException::class);
+    $paginator = new Paginator();
+    $paginator->parse(['order' => 'id,ASCENDING']);
   }
 }

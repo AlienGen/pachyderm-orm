@@ -13,7 +13,24 @@ class QueryBuilderTest extends TestCase
 
         $queryBuilder->where('field1', '=', 'value1');
 
-        // TODO: Complete test
-        $this->assertNotEmpty($queryBuilder->build());
+        $this->assertSame(['=' => ['field1', 'value1']], $queryBuilder->build());
+    }
+
+    public function testColumnNamedWhereIsTreatedAsField(): void
+    {
+        $queryBuilder = new QueryBuilder();
+        $queryBuilder->where('where', '=', 'clause');
+
+        $this->assertSame(['=' => ['where', 'clause']], $queryBuilder->build());
+    }
+
+    public function testClosureIsInvoked(): void
+    {
+        $queryBuilder = new QueryBuilder();
+        $queryBuilder->where(function (QueryBuilder $q): void {
+            $q->where('status', '=', 'ACTIVE');
+        });
+
+        $this->assertSame(['=' => ['status', 'ACTIVE']], $queryBuilder->build());
     }
 }

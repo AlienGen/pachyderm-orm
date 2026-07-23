@@ -2,17 +2,21 @@
 
 namespace Stub;
 
-class DbMock {
-
+class DbMock
+{
     private static $_storage = array();
 
-    public static function escape($value) {
+    /** @var list<array<string, mixed>>|null */
+    private static $_nextResults = null;
+
+    public static function escape($value)
+    {
         return $value;
     }
 
-    public static function insert($table, $data) {
-
-        if(!isset(self::$_storage[$table])) {
+    public static function insert($table, $data)
+    {
+        if (!isset(self::$_storage[$table])) {
             self::$_storage[$table] = [];
         }
 
@@ -23,19 +27,58 @@ class DbMock {
         return $id;
     }
 
-    public static function query($sql) {
+    public static function update($table, $data, $where): void
+    {
+    }
 
-        $table = reset(self::$_storage);
-        if($sql == 'SELECT FOUND_ROWS() AS total;') {
+    public static function delete($table, $primaryKey, $id): void
+    {
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    public static function setNextResults(array $rows): void
+    {
+        self::$_nextResults = $rows;
+    }
+
+    public static function query($sql)
+    {
+        if ($sql == 'SELECT FOUND_ROWS() AS total;') {
+            if (self::$_nextResults !== null) {
+                return [['total' => count(self::$_nextResults)]];
+            }
+            $table = reset(self::$_storage);
             return [
-                ['total' => count($table)]
+                ['total' => is_array($table) ? count($table) : 0]
             ];
         }
 
+        if (self::$_nextResults !== null) {
+            $rows = self::$_nextResults;
+            self::$_nextResults = null;
+            return $rows;
+        }
+
+        $table = reset(self::$_storage);
+        if (!is_array($table) || $table === []) {
+            return [];
+        }
+
         $object = reset($table);
+        if ($object === false) {
+            return [];
+        }
 
         return [
             $object
         ];
+    }
+
+    public static function clear(): void
+    {
+        self::$_storage = [];
+        self::$_nextResults = null;
     }
 }

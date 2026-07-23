@@ -10,8 +10,7 @@ class SimpleModelTest extends TestCase
 {
     public function testCreate(): void
     {
-        $dbMock = new DbMock();
-        SimpleObject::setDbEngine($dbMock);
+        SimpleObject::setDbEngine(DbMock::class);
 
         $model = new SimpleObject();
         $model->name = 'test';

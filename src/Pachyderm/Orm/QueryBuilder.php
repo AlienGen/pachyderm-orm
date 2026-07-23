@@ -47,12 +47,7 @@ class QueryBuilder
             return $this;
         }
 
-        if (is_callable([$this, $field])) {
-            $field($this);
-            return $this;
-        }
-
-        if (!is_string($field) && is_callable($field)) {
+        if ($field instanceof \Closure || (is_callable($field) && !is_string($field))) {
             $field($this);
             return $this;
         }
@@ -91,28 +86,3 @@ class QueryBuilder
         return base64_encode(json_encode($this->filters));
     }
 }
-/*
-
-$subquery = new QueryBuilder();
-
-
-$subquery
-  ->where('company_id', '=', 1)
-  ->where('date', '<', date('Y-m-d'))
-  ->where('user_id', 'IS NULL');
-
-$query = new QueryBuilder();
-
-$query
-  ->where('contract_id', '!=', 42)
-  ->orWhere($subquery);
-
-$array = $query->build();
-echo 'As array: ', PHP_EOL;
-print_r($array);
-
-// ['AND' => [['=' => ['contract_id', $this->contract['contract_id']], ['=' => ['version_id', $this->version['version_id']]]]]]
-
-echo 'Serialized: ', PHP_EOL;
-echo $query->serialize(), PHP_EOL;
-*/

@@ -115,4 +115,74 @@ class SQLBuilderTest extends TestCase
         $this->assertArrayHasKey('value2', $values);
         $this->assertEquals(42, $values['value2']);
     }
+
+    public function testOrderNormalizesDirection(): void
+    {
+        $sql = (new SQLBuilder('table'))
+            ->order('created_at', 'desc')
+            ->build();
+
+        $this->assertStringContainsString('ORDER BY `created_at` DESC', $sql);
+    }
+
+    public function testOrderRejectsInvalidDirection(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new SQLBuilder('table'))->order('id', 'DESC; DROP TABLE users');
+    }
+
+    public function testOrderRejectsInvalidIdentifier(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new SQLBuilder('table'))->order('id` DESC, sleep(1), `id', 'ASC');
+    }
+
+    public function testRejectsInvalidOperator(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new SQLBuilder('table'))
+            ->where(['OR 1=1--' => ['id', 1]])
+            ->build();
+    }
+
+    public function testAcceptsAllowedOperator(): void
+    {
+        $sql = (new SQLBuilder('table'))
+            ->where('name', 'LIKE', '%x%')
+            ->build();
+
+        $this->assertStringContainsString('`table`.`name` LIKE :value1', $sql);
+    }
+
+    public function testToStatementReturnsPlaceholders(): void
+    {
+        $builder = (new SQLBuilder('table'))->where('id', '=', 5);
+        [$sql, $params] = $builder->toStatement();
+
+        $this->assertStringContainsString(':value1', $sql);
+        $this->assertSame(['value1' => 5], $params);
+    }
+
+    public function testLeftJoinWithAlias(): void
+    {
+        $sql = (new SQLBuilder('orders'))
+            ->leftJoin('customers', 'id', 'customer_id', 'customer')
+            ->selectAs('customer.name', 'customer__name')
+            ->build();
+
+        $this->assertSame(
+            'SELECT SQL_CALC_FOUND_ROWS `orders`.*, `customer`.`name` AS `customer__name` FROM `orders` LEFT JOIN `customers` AS `customer` ON `customer`.`id` = `orders`.`customer_id`',
+            $sql
+        );
+    }
+
+    public function testInnerJoinUnchangedWithoutAlias(): void
+    {
+        $sql = (new SQLBuilder('table'))
+            ->join('table2', 'field_id')
+            ->build();
+
+        $this->assertStringContainsString('INNER JOIN `table2` ON `table2`.`field_id` = `table`.`field_id`', $sql);
+        $this->assertStringNotContainsString('AS', $sql);
+    }
 }

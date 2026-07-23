@@ -22,12 +22,24 @@ abstract class AbstractModel extends IterableObjectSet
     protected array $_fields = array();
 
     /**
+     * Mass-assignment allowlist. When non-empty, only these keys are accepted by set()/create().
+     * @var list<string>
+     */
+    protected array $fillable = [];
+
+    /**
+     * Mass-assignment denylist. Used when $fillable is empty. Use ['*'] to deny all.
+     * @var list<string>
+     */
+    protected array $guarded = [];
+
+    /**
      * Account constructor.
      * @param $data array
      */
     public function __construct(iterable $data = array())
     {
-        $this->set($data);
+        $this->forceSet($data);
         $this->syncOriginal();
     }
 
@@ -39,11 +51,86 @@ abstract class AbstractModel extends IterableObjectSet
         return $this->_fields;
     }
 
+    /**
+     * Columns to SELECT for a BelongsTo eager join (owner key always included).
+     *
+     * @return list<string>
+     */
+    public function getSelectFieldsForRelation(string $mustInclude): array
+    {
+        if (empty($this->_fields)) {
+            return [$mustInclude];
+        }
+
+        $fields = [];
+        foreach ($this->_fields as $f) {
+            if (is_string($f)) {
+                $fields[] = $f;
+            }
+        }
+
+        if (!in_array($mustInclude, $fields, true)) {
+            $fields[] = $mustInclude;
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Mass-assign attributes (respects $fillable / $guarded and strips primary keys).
+     */
     public function set(iterable $data = array()): void
+    {
+        foreach ($this->filterMassAssignment($data, true) as $k => $v) {
+            $this->$k = $v;
+        }
+    }
+
+    /**
+     * Assign attributes without mass-assignment filtering (hydration / refresh).
+     */
+    public function forceSet(iterable $data = array()): void
     {
         foreach ($data as $k => $v) {
             $this->$k = $v;
         }
+    }
+
+    /**
+     * @param iterable<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function filterMassAssignment(iterable $data, bool $stripPrimaryKey = false): array
+    {
+        $filtered = [];
+        foreach ($data as $k => $v) {
+            $filtered[$k] = $v;
+        }
+
+        if (!empty($this->fillable)) {
+            $allowed = array_flip($this->fillable);
+            $filtered = array_intersect_key($filtered, $allowed);
+        } elseif (!empty($this->guarded)) {
+            if (in_array('*', $this->guarded, true)) {
+                $filtered = [];
+            } else {
+                foreach ($this->guarded as $guardedKey) {
+                    unset($filtered[$guardedKey]);
+                }
+            }
+        }
+
+        if ($stripPrimaryKey && isset($this->primary_key) && !empty($this->primary_key)) {
+            if (is_array($this->primary_key)) {
+                foreach ($this->primary_key as $pk) {
+                    unset($filtered[$pk]);
+                }
+            } else {
+                unset($filtered[$this->primary_key]);
+            }
+        }
+
+        return $filtered;
     }
 
     /**

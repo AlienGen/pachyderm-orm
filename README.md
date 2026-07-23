@@ -19,6 +19,8 @@ A lightweight, expressive ORM for the Pachyderm micro‑framework.
 - [Relations via inheritance (optional)](#relations-via-inheritance-optional)
 - [Scopes](#scopes)
 - [Pagination helper](#pagination-helper)
+- [Mass assignment](#mass-assignment)
+- [CRUD routes (security)](#crud-routes-security)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Advanced: Custom DB engine (optional)](#advanced-custom-db-engine-optional)
@@ -181,6 +183,43 @@ $results = MyEntity::builder()->where($filters)->get();
 
 ### Relations
 
+#### BelongsTo (LEFT JOIN eager load)
+
+Declare many-to-one relations with the `#[BelongsTo]` attribute on the foreign-key property. Eager-load with `builder()->with('relation')` (LEFT JOIN + column aliases). Many-to-many is not supported.
+
+```php
+use Pachyderm\Orm\Model;
+use Pachyderm\Orm\Relation\BelongsTo;
+
+class Order extends Model
+{
+    public string $table = 'orders';
+    public string $primary_key = 'id';
+
+    #[BelongsTo(Customer::class)] // FK = customer_id, ownerKey = Customer::$primary_key, name = customer
+    public $customer_id;
+
+    // Optional overrides:
+    // #[BelongsTo(Customer::class, foreignKey: 'customer_id', ownerKey: 'id', name: 'customer')]
+}
+
+// Related models should define $_fields so joined columns can be selected/aliased.
+class Customer extends Model
+{
+    public string $table = 'customers';
+    public string $primary_key = 'id';
+    protected array $_fields = ['id', 'name', 'email'];
+}
+
+$orders = Order::builder()->with('customer')->get();
+$orders->first()->customer; // Customer model or null
+
+// Filter on the joined alias
+Order::builder()->with('customer')->where('customer.name', '=', 'Ada')->get();
+```
+
+#### Serialization helper (optional)
+
 For convenient relationship fetching and JSON‑ready serialization, use the trait `Pachyderm\Orm\Traits\RelationshipFetcherModel` in your models. It lets you declare relationship methods and include/exclude them when converting to arrays.
 
 - Add the trait to your model
@@ -247,7 +286,7 @@ Order::maxDepth(2); // default is 1
 
 - Caching: during a single serialization pass, results of relationship methods are cached per model id to avoid duplicate queries.
 
-Tip: For simple foreign keys, returning the related `Model::find(...)` is fine. For lists, prefer returning an `SQLBuilder` to defer execution until serialization.
+Tip: For simple foreign keys, prefer `#[BelongsTo]` + `builder()->with(...)`. For lists (has-many), prefer returning an `SQLBuilder` from a method used with `RelationshipFetcherModel`.
 
 ---
 
@@ -325,6 +364,50 @@ $builder = MyEntity::pagination([
 $collection = $builder->get();
 ```
 
+Column names and `ORDER BY` directions are validated (`ASC`/`DESC` only). Invalid identifiers or operators throw `\InvalidArgumentException`.
+
+---
+
+### Mass assignment
+
+`set()` and `create()` respect optional `$fillable` / `$guarded` on the model (Laravel-style):
+
+- If `$fillable` is non-empty, only those attributes are accepted.
+- Else if `$guarded` is non-empty, those keys are stripped (`['*']` denies all).
+- Else all attributes are accepted (backward compatible).
+
+Primary keys are stripped during mass assignment via `set()` / `create()`. Use `forceSet()` when hydrating trusted data.
+
+```php
+class User extends Model
+{
+    public string $table = 'users';
+    public string $primary_key = 'id';
+
+    protected array $fillable = ['name', 'email'];
+    // or: protected array $guarded = ['id', 'is_admin'];
+}
+```
+
+---
+
+### CRUD routes (security)
+
+`Pachyderm\Orm\Helper\CRUDRoute` registers open list/read/create/update/delete endpoints. **Do not use in production without authorization and fillable attributes.**
+
+```php
+use Pachyderm\Orm\Helper\CRUDRoute;
+
+CRUDRoute::init($dispatcher);
+
+CRUDRoute::route('user', User::class, '/api/', function (string $action, mixed ...$args): bool {
+    // Return false to respond with HTTP 403
+    return /* current user may perform $action */;
+});
+```
+
+Without the `$authorize` callback, every action is allowed. Prefer setting `$fillable` on the model as well.
+
 ---
 
 ### Testing
@@ -360,6 +443,12 @@ Required static methods on a custom engine class:
 - `public static function update(string $table, array $data, array $where): void`
 - `public static function delete(string $table, string|array $primaryKey, string|int|array $id): void`
 - `public static function escape(mixed $value): string|int|float|null`
+
+Optional (preferred when available) — if present, `Model::query()` uses bound parameters instead of interpolating escaped values into SQL:
+
+- `public static function queryWithParams(string $sql, array $params): array`
+
+`SQLBuilder::toStatement()` returns `[sqlWithPlaceholders, params]` for engines that support this path.
 
 ---
 

@@ -14,7 +14,16 @@ class CRUDRoute
         self::$dispatcher = $dispatcher;
     }
 
-    public static function route(string $name, string $model, string $prefix = '/'): void
+    /**
+     * Register CRUD routes for a model.
+     *
+     * WARNING: Without an $authorize callback and without model $fillable/$guarded,
+     * these endpoints are fully open and subject to mass assignment.
+     *
+     * @param callable|null $authorize Optional gate: fn(string $action, mixed ...$args): bool
+     *                                  Actions: list|read|create|update|delete
+     */
+    public static function route(string $name, string $model, string $prefix = '/', ?callable $authorize = null): void
     {
         if (self::$dispatcher === NULL) {
             throw new \Exception('CRUDRoute must be initialized!');
@@ -25,11 +34,15 @@ class CRUDRoute
         }
 
         $plural = self::pluralize($name);
+        $deny = [403, ['success' => false]];
 
         /**
          * Listing
          */
-        self::$dispatcher->get($prefix . $plural, function () use ($model) {
+        self::$dispatcher->get($prefix . $plural, function () use ($model, $authorize, $deny) {
+            if ($authorize !== null && !$authorize('list')) {
+                return $deny;
+            }
             $entities = $model::pagination($_GET)->get();
             return [200, ['success' => true, 'items' => $entities, 'total' => $entities->totalRecords()]];
         });
@@ -37,7 +50,10 @@ class CRUDRoute
         /**
          * Read one
          */
-        self::$dispatcher->get($prefix . $name . '/{id}', function ($id) use ($model, $name) {
+        self::$dispatcher->get($prefix . $name . '/{id}', function ($id) use ($model, $name, $authorize, $deny) {
+            if ($authorize !== null && !$authorize('read', $id)) {
+                return $deny;
+            }
             $entity = $model::find($id);
             return [200, ['success' => true, $name => $entity]];
         });
@@ -45,7 +61,10 @@ class CRUDRoute
         /**
          * Create
          */
-        self::$dispatcher->post($prefix . $name, function ($data) use ($model, $name) {
+        self::$dispatcher->post($prefix . $name, function ($data) use ($model, $name, $authorize, $deny) {
+            if ($authorize !== null && !$authorize('create', $data)) {
+                return $deny;
+            }
             $entity = $model::create($data);
             return [201, ['success' => true, $name => $entity]];
         });
@@ -53,20 +72,26 @@ class CRUDRoute
         /**
          * Update
          */
-        self::$dispatcher->put($prefix . $name . '/{id}', function ($id, $data) use ($model, $name) {
+        self::$dispatcher->put($prefix . $name . '/{id}', function ($id, $data) use ($model, $name, $authorize, $deny) {
+            if ($authorize !== null && !$authorize('update', $id, $data)) {
+                return $deny;
+            }
             $entity = $model::find($id);
             $entity->set($data);
             $entity->save();
-            return [201, ['success' => true, $name => $entity]];
+            return [200, ['success' => true, $name => $entity]];
         });
 
         /**
          * Delete
          */
-        self::$dispatcher->delete($prefix . $name . '/{id}', function ($id) use ($model, $name) {
+        self::$dispatcher->delete($prefix . $name . '/{id}', function ($id) use ($model, $name, $authorize, $deny) {
+            if ($authorize !== null && !$authorize('delete', $id)) {
+                return $deny;
+            }
             $entity = $model::find($id);
             $entity->delete();
-            return [201, ['success' => true]];
+            return [200, ['success' => true]];
         });
     }
 

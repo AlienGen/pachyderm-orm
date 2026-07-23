@@ -4,9 +4,10 @@ namespace Model;
 
 use Pachyderm\Orm\Model;
 
-class SimpleObject extends Model {
-
+class SimpleObject extends Model
+{
     public $table = 'simple_object';
     public $primary_key = 'simple_object_id';
 
+    protected array $_fields = ['simple_object_id', 'name'];
 }

@@ -32,7 +32,8 @@ class Paginator
 
   public function addOrder($field, $order)
   {
-    $this->sort[$field] = $order;
+    SQLBuilder::assertIdentifier($field);
+    $this->sort[$field] = SQLBuilder::assertOrderDirection($order);
   }
 
   public function parse($params)

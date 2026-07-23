@@ -79,7 +79,7 @@ abstract class Model extends AbstractModel
          */
         if ($this->getId() === null) {
             $newModel = self::create($this->_data);
-            $this->set($newModel->_data);
+            $this->forceSet($newModel->_data);
             $this->syncOriginal();
             return;
         }
@@ -122,7 +122,7 @@ abstract class Model extends AbstractModel
         // Refresh the entity.
         try {
             $newValues = $this->find($this->getId());
-            $this->set($newValues->_data);
+            $this->forceSet($newValues->_data);
             $this->syncOriginal();
         } catch (ModelNotFoundException $model) {
             // Model has been deleted, or is unable to be found.
@@ -172,6 +172,8 @@ abstract class Model extends AbstractModel
     public static function create(iterable $data): Model
     {
         $model = new static();
+
+        $data = $model->filterMassAssignment($data, true);
 
         // TODO: Avoid doing that
         unset($data['created_at']);
@@ -229,7 +231,7 @@ abstract class Model extends AbstractModel
             $id = $data[$model->primary_key];
         }
 
-        if (!$id) {
+        if ($id === null || $id === false || $id === '') {
             throw new \Exception('Unable to create the entity!');
         }
 
@@ -292,12 +294,16 @@ abstract class Model extends AbstractModel
 
     public static function query(SQLBuilder $builder): Collection
     {
-        $sql = $builder->toSQL(self::$_dbEngine);
-
         /**
-         * Query the database.
+         * Query the database (prefer bound params when the engine supports it).
          */
-        $results = self::$_dbEngine::query($sql);
+        if (method_exists(self::$_dbEngine, 'queryWithParams')) {
+            [$sql, $params] = $builder->toStatement();
+            $results = self::$_dbEngine::queryWithParams($sql, $params);
+        } else {
+            $sql = $builder->toSQL(self::$_dbEngine);
+            $results = self::$_dbEngine::query($sql);
+        }
         $rowCount = self::$_dbEngine::query('SELECT FOUND_ROWS() AS total;');
         $total_count = 0;
         foreach ($rowCount AS $row) {
@@ -305,11 +311,42 @@ abstract class Model extends AbstractModel
         }
 
         /**
-         * Instantiate the final objects.
+         * Instantiate the final objects (hydrate BelongsTo eager relations).
          */
+        $eager = $builder->eagerRelations();
         $collection = new Collection($total_count);
         foreach ($results AS $item) {
-            $collection->add(new static($item));
+            $relationModels = [];
+            foreach ($eager as $name => $meta) {
+                $prefix = $meta['prefix'];
+                $nested = [];
+                $allNull = true;
+                foreach ($item as $key => $value) {
+                    if (!str_starts_with((string) $key, $prefix)) {
+                        continue;
+                    }
+                    $nested[substr((string) $key, strlen($prefix))] = $value;
+                    unset($item[$key]);
+                    if ($value !== null) {
+                        $allNull = false;
+                    }
+                }
+
+                if ($allNull || $nested === []) {
+                    $relationModels[$name] = null;
+                } else {
+                    $related = new $meta['class']();
+                    $related->forceSet($nested);
+                    $related->syncOriginal();
+                    $relationModels[$name] = $related;
+                }
+            }
+
+            $model = new static($item);
+            foreach ($relationModels as $name => $related) {
+                $model->$name = $related;
+            }
+            $collection->add($model);
         }
 
         return $collection;
@@ -404,7 +441,7 @@ abstract class Model extends AbstractModel
 
     public static function find(string|array $id): Model
     {
-        if (empty($id)) {
+        if ($id === null || $id === '' || (is_array($id) && $id === [])) {
             throw new ModelNotFoundException('Calling "find" on model "' . get_called_class() . '" require an id not empty!');
         }
 
