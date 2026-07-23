@@ -154,6 +154,8 @@ $filters = (new QueryBuilder())
 $results = MyEntity::builder()->where($filters)->get();
 ```
 
+When a nested `QueryBuilder` is passed into a parent that already has an owner table (the root filters on `SQLBuilder`, or another builder after `prepend`), unqualified column names in the nested tree inherit that table prefix — the same rule as direct `where('col', ...)`. Already-qualified names (`other.col`) are left unchanged. Prefer nested builders over bare columns when combining compound filters with `with()` / JOINs so shared column names stay unambiguous.
+
 Top-level OR works the same way:
 
 ```php
@@ -220,6 +222,7 @@ With `groupBy()` or aggregates, list the columns you need in `select()` yourself
 
 ```php
 use Pachyderm\Orm\Model;
+use Pachyderm\Orm\QueryBuilder;
 use Pachyderm\Orm\Relation\BelongsTo;
 
 class Order extends Model
@@ -253,6 +256,16 @@ $order->customer_id;  // foreign-key value from the orders row
 Order::builder()
     ->with('customer')
     ->where('customer.name', '=', 'Ada')
+    ->get();
+
+// Owner-table columns in nested QueryBuilders stay qualified under with()
+$open = (new QueryBuilder())
+    ->where('closed_at', 'IS NULL')
+    ->orWhere('status', '=', 'OPEN');
+
+Order::builder()
+    ->where($open)
+    ->with('customer')
     ->get();
 ```
 

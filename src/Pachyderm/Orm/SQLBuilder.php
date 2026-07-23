@@ -311,7 +311,7 @@ class SQLBuilder
 
     public function order(string $field, string $order): SQLBuilder
     {
-        $this->assertIdentifier($field);
+        $field = $this->qualifyColumn($field);
         $this->_orders[$field] = self::assertOrderDirection($order);
         return $this;
     }

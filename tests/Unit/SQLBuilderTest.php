@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Pachyderm\Orm\QueryBuilder;
 use Pachyderm\Orm\SQLBuilder;
 use PHPUnit\Framework\TestCase;
 
@@ -122,7 +123,60 @@ class SQLBuilderTest extends TestCase
             ->order('created_at', 'desc')
             ->build();
 
-        $this->assertStringContainsString('ORDER BY `created_at` DESC', $sql);
+        $this->assertStringContainsString('ORDER BY `table`.`created_at` DESC', $sql);
+    }
+
+    public function testNestedQueryBuilderQualifiesColumnsWithJoin(): void
+    {
+        $pipelineOpen = (new QueryBuilder())
+            ->where('won_date', 'IS NULL')
+            ->orWhere('imputation_id', 'IS NULL');
+
+        $sql = (new SQLBuilder('opportunities'))
+            ->where('active', '=', 1)
+            ->where($pipelineOpen)
+            ->leftJoin('customers', 'id', 'customer_id', 'customer')
+            ->build();
+
+        $this->assertStringContainsString('`opportunities`.`won_date` IS NULL', $sql);
+        $this->assertStringContainsString('`opportunities`.`imputation_id` IS NULL', $sql);
+        $this->assertStringNotContainsString('(`won_date` IS NULL', $sql);
+        $this->assertStringNotContainsString('OR `imputation_id` IS NULL', $sql);
+    }
+
+    public function testNestedQueryBuilderPreservesAlreadyQualifiedColumns(): void
+    {
+        $nested = (new QueryBuilder())
+            ->where('opportunities.imputation_id', 'IS NULL')
+            ->orWhere('customer.imputation_id', 'IS NULL');
+
+        $sql = (new SQLBuilder('opportunities'))
+            ->where($nested)
+            ->leftJoin('customers', 'id', 'customer_id', 'customer')
+            ->build();
+
+        $this->assertStringContainsString('`opportunities`.`imputation_id` IS NULL', $sql);
+        $this->assertStringContainsString('`customer`.`imputation_id` IS NULL', $sql);
+    }
+
+    public function testDirectWhereStillPrefixesWithOwnerTable(): void
+    {
+        $sql = (new SQLBuilder('opportunities'))
+            ->where('imputation_id', 'IS NULL')
+            ->leftJoin('customers', 'id', 'customer_id', 'customer')
+            ->build();
+
+        $this->assertStringContainsString('WHERE `opportunities`.`imputation_id` IS NULL', $sql);
+    }
+
+    public function testOrderQualifiesColumnWithJoin(): void
+    {
+        $sql = (new SQLBuilder('opportunities'))
+            ->order('expected_date', 'ASC')
+            ->leftJoin('customers', 'id', 'customer_id', 'customer')
+            ->build();
+
+        $this->assertStringContainsString('ORDER BY `opportunities`.`expected_date` ASC', $sql);
     }
 
     public function testOrderRejectsInvalidDirection(): void

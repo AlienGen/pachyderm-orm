@@ -33,4 +33,83 @@ class QueryBuilderTest extends TestCase
 
         $this->assertSame(['=' => ['status', 'ACTIVE']], $queryBuilder->build());
     }
+
+    public function testPrependQualifiesExistingFilters(): void
+    {
+        $queryBuilder = (new QueryBuilder())
+            ->where('won_date', 'IS NULL')
+            ->orWhere('imputation_id', 'IS NULL');
+
+        $queryBuilder->prepend('opportunities');
+
+        $this->assertSame(
+            [
+                'OR' => [
+                    ['IS NULL' => ['opportunities.won_date']],
+                    ['IS NULL' => ['opportunities.imputation_id']],
+                ],
+            ],
+            $queryBuilder->build()
+        );
+    }
+
+    public function testNestedBuilderInheritsParentTable(): void
+    {
+        $inner = (new QueryBuilder())
+            ->where('name', 'LIKE', '%john%')
+            ->orWhere('name', 'LIKE', '%jane%');
+
+        $outer = (new QueryBuilder());
+        $outer->prepend('users');
+        $outer->where('status', '=', 'ACTIVE');
+        $outer->where($inner);
+
+        $built = $outer->build();
+
+        $this->assertSame(
+            [
+                'AND' => [
+                    ['=' => ['users.status', 'ACTIVE']],
+                    [
+                        'OR' => [
+                            ['LIKE' => ['users.name', '%john%']],
+                            ['LIKE' => ['users.name', '%jane%']],
+                        ],
+                    ],
+                ],
+            ],
+            $built
+        );
+    }
+
+    public function testPrependLeavesAlreadyQualifiedColumns(): void
+    {
+        $queryBuilder = (new QueryBuilder())
+            ->where('other.col', '=', 1)
+            ->where('bare', '=', 2);
+
+        $queryBuilder->prepend('owner');
+
+        $this->assertSame(
+            [
+                'AND' => [
+                    ['=' => ['other.col', 1]],
+                    ['=' => ['owner.bare', 2]],
+                ],
+            ],
+            $queryBuilder->build()
+        );
+    }
+
+    public function testPrependQualifiesColumnComparisons(): void
+    {
+        $queryBuilder = new QueryBuilder();
+        $queryBuilder->where(['COLUMN' => ['left_col', '=', 'right_col']]);
+        $queryBuilder->prepend('t');
+
+        $this->assertSame(
+            ['COLUMN' => ['t.left_col', '=', 't.right_col']],
+            $queryBuilder->build()
+        );
+    }
 }
