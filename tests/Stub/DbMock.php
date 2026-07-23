@@ -9,6 +9,12 @@ class DbMock
     /** @var list<array<string, mixed>>|null */
     private static $_nextResults = null;
 
+    /** @var array{table: string, data: array, where: mixed}|null */
+    public static $lastUpdate = null;
+
+    /** @var array{table: string, data: array}|null */
+    public static $lastInsert = null;
+
     public static function escape($value)
     {
         return $value;
@@ -23,12 +29,14 @@ class DbMock
         $id = count(self::$_storage[$table]) + 1;
 
         self::$_storage[$table][$id] = $data;
+        self::$lastInsert = ['table' => $table, 'data' => $data];
 
         return $id;
     }
 
     public static function update($table, $data, $where): void
     {
+        self::$lastUpdate = ['table' => $table, 'data' => $data, 'where' => $where];
     }
 
     public static function delete($table, $primaryKey, $id): void
@@ -80,5 +88,7 @@ class DbMock
     {
         self::$_storage = [];
         self::$_nextResults = null;
+        self::$lastUpdate = null;
+        self::$lastInsert = null;
     }
 }

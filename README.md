@@ -1,11 +1,12 @@
 ## Pachyderm ORM
 
-A lightweight, expressive ORM for the Pachyderm micro‑framework.
+A lightweight ORM for the [Pachyderm](https://github.com/AlienGen/Pachyderm) micro-framework.
 
-- **Models**: map database tables to PHP classes
-- **Fluent queries**: chainable builders for filters, joins, order, pagination
-- **Collections**: iterable results with total count support
-- **Inheritance**: optional parent model for shared fields
+- **Models** — map tables to PHP classes
+- **Fluent queries** — filter, join, order, paginate
+- **BelongsTo relations** — load related rows with a LEFT JOIN
+- **Collections** — iterable results with a total count
+- **Mass assignment guards** — optional `$fillable` / `$guarded`
 
 ---
 
@@ -14,16 +15,19 @@ A lightweight, expressive ORM for the Pachyderm micro‑framework.
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Querying](#querying)
-  - [Nested groups with QueryBuilder (OR groups)](#nested-groups-with-querybuilder-or-groups)
+  - [Nested groups with QueryBuilder](#nested-groups-with-querybuilder)
+  - [EXISTS, subqueries, and aggregates](#exists-subqueries-and-aggregates)
 - [Relations](#relations)
-- [Relations via inheritance (optional)](#relations-via-inheritance-optional)
+  - [BelongsTo](#belongsto)
+  - [Serializing relations to arrays (optional)](#serializing-relations-to-arrays-optional)
+- [Table inheritance (optional)](#table-inheritance-optional)
 - [Scopes](#scopes)
 - [Pagination helper](#pagination-helper)
 - [Mass assignment](#mass-assignment)
-- [CRUD routes (security)](#crud-routes-security)
+- [CRUD routes](#crud-routes)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
-- [Advanced: Custom DB engine (optional)](#advanced-custom-db-engine-optional)
+- [Custom DB engine](#custom-db-engine)
 - [License](#license)
 
 ---
@@ -34,13 +38,11 @@ A lightweight, expressive ORM for the Pachyderm micro‑framework.
 composer require aliengen/pachyderm-orm
 ```
 
-You're ready to use it in your Pachyderm project.
-
 ---
 
 ### Quick start
 
-#### 1) Declare a Model
+#### 1) Declare a model
 
 ```php
 <?php
@@ -56,7 +58,7 @@ class MyEntity extends Model
 }
 ```
 
-#### 2) Create an entity
+#### 2) Create
 
 ```php
 $entity = MyEntity::create([
@@ -90,29 +92,19 @@ $entity->delete();
 
 ### Querying
 
-Use the fluent builder returned by `Model::builder()` or convenience helpers like `where()`.
-
-- **All rows**
+Use `Model::builder()` or helpers like `where()`.
 
 ```php
+// All rows (default limit applies via findAll)
 $entities = MyEntity::findAll();
-```
 
-- **Basic filter**
-
-```php
+// Filter
 $entities = MyEntity::where('column_2', '=', 42)->get();
-```
 
-- **First row only**
-
-```php
+// First match
 $entity = MyEntity::findFirst(['=' => ['entity_id', 42]]);
-```
 
-- **Order, offset, limit**
-
-```php
+// Order, offset, limit
 $entities = MyEntity::builder()
     ->where(['=' => ['status', 'ACTIVE']])
     ->order('created_at', 'DESC')
@@ -121,7 +113,7 @@ $entities = MyEntity::builder()
     ->get();
 ```
 
-- **Fluent and readable complex filters with `QueryBuilder` (recommended)**
+For complex filters, prefer `QueryBuilder` over nested arrays:
 
 ```php
 use Pachyderm\Orm\QueryBuilder;
@@ -137,11 +129,9 @@ $entities = MyEntity::builder()
     ->get();
 ```
 
-You can still pass the nested array format if needed, but `QueryBuilder` exists to avoid writing those arrays by hand.
+#### Nested groups with QueryBuilder
 
-#### Nested groups with QueryBuilder (OR groups)
-
-Group conditions by composing QueryBuilders and passing them to `where()`/`orWhere()`:
+Compose builders to group `AND` / `OR` conditions:
 
 ```php
 use Pachyderm\Orm\QueryBuilder;
@@ -156,7 +146,6 @@ $typeOrScore = (new QueryBuilder())
     ->where('type', 'IN', ['A', 'B'])
     ->orWhere('score', '>', 90);
 
-// status = 'ACTIVE' AND (name... OR name...) AND (type... OR score...)
 $filters = (new QueryBuilder())
     ->where('status', '=', 'ACTIVE')
     ->where($nameOr)
@@ -165,7 +154,7 @@ $filters = (new QueryBuilder())
 $results = MyEntity::builder()->where($filters)->get();
 ```
 
-You can also mix nested groups with top-level OR:
+Top-level OR works the same way:
 
 ```php
 $group = (new QueryBuilder())
@@ -174,53 +163,60 @@ $group = (new QueryBuilder())
 
 $filters = (new QueryBuilder())
     ->where('status', '=', 'ACTIVE')
-    ->orWhere($group); // status = 'ACTIVE' OR (country = 'FR' OR country = 'DE')
+    ->orWhere($group); // ACTIVE OR (FR OR DE)
 
 $results = MyEntity::builder()->where($filters)->get();
 ```
 
-#### EXISTS, correlated subqueries, and aggregates
+#### EXISTS, subqueries, and aggregates
 
-These APIs live on `SQLBuilder` only (not in serializable `QueryBuilder` / `pagination` `filter` JSON).
+Use these on the query builder when you need “rows that have related rows”, nested `IN` selects, or `GROUP BY` summaries.
+
+They are **not** available through the pagination `filter` query parameter (that path only supports simple filters).
 
 ```php
-// EXISTS with correlation
+// Orders that have at least one line item with qty > 0
 $orders = Order::builder()->whereExists(
     OrderItem::builder()
         ->whereColumn('order_items.order_id', '=', 'orders.id')
         ->where('qty', '>', 0)
 )->get();
 
-// NOT EXISTS
+// Users with no matching flag row
 User::builder()->whereNotExists(
     Flag::builder()->whereColumn('flags.user_id', '=', 'users.id')
 )->get();
 
-// Subquery as a value (IN / comparisons)
+// IN (subquery)
 User::builder()->where(
     'id',
     'IN',
     Order::builder()->select('user_id')->where('status', '=', 'PAID')
 )->get();
 
-// Aggregates + GROUP BY + HAVING
+// Aggregates
 Order::builder()
     ->select('status')
-    ->selectMax('amount', 'max_amount') // also: selectMin/Sum/Avg/Count
+    ->selectMax('amount', 'max_amount') // also: selectMin, selectSum, selectAvg, selectCount
     ->groupBy('status')
     ->having('max_amount', '>', 100)
     ->get();
 ```
 
-When using aggregates or `groupBy()`, `table.*` is not selected automatically—select the grouped columns explicitly. Related models hydrate as attribute bags via `get()` as usual.
+With `groupBy()` or aggregates, list the columns you need in `select()` yourself (the builder will not add `table.*` automatically).
 
 ---
 
 ### Relations
 
-#### BelongsTo (LEFT JOIN eager load)
+#### BelongsTo
 
-Declare many-to-one relations with the `#[BelongsTo]` attribute on the foreign-key property. Eager-load with `builder()->with('relation')` (LEFT JOIN + column aliases). Many-to-many is not supported.
+**BelongsTo** is a many-to-one link: each order has one customer. You declare a typed property for the related model, and tell the ORM which foreign-key column points to it.
+
+1. Add a nullable typed property (the association).
+2. Annotate it with `#[BelongsTo(foreignKey: '...')]`.
+3. **Do not** declare the foreign-key column as a PHP property — treat it like any other table column (`$order->customer_id`).
+4. Load it explicitly with `builder()->with('customer')` (a SQL `LEFT JOIN`). Without `with()`, `$order->customer` stays `null`.
 
 ```php
 use Pachyderm\Orm\Model;
@@ -231,35 +227,49 @@ class Order extends Model
     public string $table = 'orders';
     public string $primary_key = 'id';
 
-    #[BelongsTo(Customer::class)] // FK = customer_id, ownerKey = Customer::$primary_key, name = customer
-    public $customer_id;
+    // Related type is taken from the property; foreignKey is the column on orders
+    #[BelongsTo(foreignKey: 'customer_id')]
+    public ?Customer $customer = null;
 
-    // Optional overrides:
-    // #[BelongsTo(Customer::class, foreignKey: 'customer_id', ownerKey: 'id', name: 'customer')]
+    // Or be explicit:
+    // #[BelongsTo(Customer::class, foreignKey: 'customer_id', ownerKey: 'id')]
 }
 
-// Related models should define $_fields so joined columns can be selected/aliased.
 class Customer extends Model
 {
     public string $table = 'customers';
     public string $primary_key = 'id';
+
+    // Columns to bring back when the relation is eager-loaded
     protected array $_fields = ['id', 'name', 'email'];
 }
 
-$orders = Order::builder()->with('customer')->get();
-$orders->first()->customer; // Customer model or null
+$order = Order::builder()->with('customer')->first();
 
-// Filter on the joined alias
-Order::builder()->with('customer')->where('customer.name', '=', 'Ada')->get();
+$order->customer;     // Customer instance, or null if no match
+$order->customer_id;  // foreign-key value from the orders row
+
+// Filter on the joined table (alias = relation name)
+Order::builder()
+    ->with('customer')
+    ->where('customer.name', '=', 'Ada')
+    ->get();
 ```
 
-#### Serialization helper (optional)
+When you `save()` or `create()`, only column values are written. The related `Customer` object is never inserted into a column — change `$order->customer_id` if you need to update the link.
 
-For convenient relationship fetching and JSON‑ready serialization, use the trait `Pachyderm\Orm\Traits\RelationshipFetcherModel` in your models. It lets you declare relationship methods and include/exclude them when converting to arrays.
+Many-to-many is not supported.
 
-- Add the trait to your model
+#### Serializing relations to arrays (optional)
+
+`RelationshipFetcherModel` is a separate helper for building arrays/JSON. It is **not** the same as BelongsTo eager loading.
+
+- Prefer `#[BelongsTo]` + `builder()->with(...)` to **load** many-to-one data in one query.
+- Use this trait when you need `toArray()` to include related data (including has-many via methods).
+- This trait’s `with()` / `without()` only affect serialization — they do **not** add SQL joins.
 
 ```php
+use Pachyderm\Orm\SQLBuilder;
 use Pachyderm\Orm\Traits\RelationshipFetcherModel;
 
 class Order extends Model
@@ -269,65 +279,37 @@ class Order extends Model
     public string $table = 'orders';
     public string $primary_key = 'id';
 
-    // Default related fields to include when serializing
     public array $additionalFields = ['customer', 'items'];
 
-    // belongsTo
     public function customer(): Customer
     {
         return Customer::find($this->customer_id);
     }
 
-    // hasMany (return a builder; it will be executed automatically)
     public function items(): SQLBuilder
     {
         return OrderItem::builder()->where('order_id', '=', $this->id);
     }
 }
-```
 
-- Serialize with relations
-
-```php
 $order = Order::find(1001);
-$array = $order->toArray(); // includes id, fields, plus customer and items
+$array = $order->toArray(); // includes customer and items
+
+$array = Order::find(1001)
+    ->with('customer')   // include in toArray()
+    ->without('items')   // omit from toArray()
+    ->toArray();
+
+Order::maxDepth(2); // limit nested serialization (default 1)
 ```
 
-- Override included fields at runtime with `with()` and `without()`
-
-```php
-$order = Order::find(1001)
-    ->with('customer')       // add a field
-    ->without('items');      // remove a field
-
-$result = $order->toArray();
-```
-
-- Control nested depth globally (prevents infinite recursion)
-
-```php
-use Pachyderm\Orm\Traits\RelationshipFetcherModel as RFM;
-
-Order::maxDepth(2); // default is 1
-```
-
-- Supported return types in relationship methods
-  - Model instance (must implement `toArray()`) – will be serialized recursively
-  - `Pachyderm\Orm\Collection` – each item is serialized
-  - `Pachyderm\Orm\SQLBuilder` – executed via `get()` then serialized
-  - String – returned as-is
-  - Any object with `reference()` – the return value of `reference()` is used
-  - Plain arrays – items are serialized recursively
-
-- Caching: during a single serialization pass, results of relationship methods are cached per model id to avoid duplicate queries.
-
-Tip: For simple foreign keys, prefer `#[BelongsTo]` + `builder()->with(...)`. For lists (has-many), prefer returning an `SQLBuilder` from a method used with `RelationshipFetcherModel`.
+Relationship methods may return a model, a `Collection`, an `SQLBuilder` (run automatically), a string, an object with `reference()`, or a plain array.
 
 ---
 
-### Relations via inheritance (optional)
+### Table inheritance (optional)
 
-You can model table inheritance by declaring a parent Model on the child using the `inherit` property. Shared fields are read from the parent table and joined automatically.
+Share columns across a parent table and a child table with `inherit`. Queries on the child join the parent automatically.
 
 ```php
 class ParentEntity extends Model
@@ -335,7 +317,6 @@ class ParentEntity extends Model
     public string $table = 'parents';
     public string $primary_key = 'id';
 
-    // Return list of field names present on this table
     public function getFields(): array
     {
         return ['name', 'email'];
@@ -347,21 +328,19 @@ class ChildEntity extends Model
     public string $table = 'children';
     public string $primary_key = 'id';
 
-    // either an instance or a class-string
     public string $inherit = ParentEntity::class;
 }
 
-// Querying ChildEntity will auto-join ParentEntity and project its fields
 $items = ChildEntity::findAll();
 ```
 
-When saving/creating `ChildEntity`, parent fields are forwarded to the parent model accordingly.
+On create/save, parent fields are written to the parent table.
 
 ---
 
 ### Scopes
 
-Scopes are predefined filters attached to a model.
+Scopes are default filters registered in `boot()`. They apply whenever you use `builder()` (unless you pass `builder(false)`).
 
 ```php
 class Orders extends Model
@@ -375,43 +354,45 @@ class Orders extends Model
     }
 }
 
-$paid = Orders::builder()->where(['=' => ['country', 'FR']])->get();
-// or rely on the scope via builder(true) by default
+$paidInFrance = Orders::builder()
+    ->where(['=' => ['country', 'FR']])
+    ->get();
 ```
 
 ---
 
 ### Pagination helper
 
-`Model::pagination(array $params)` consumes typical REST query params and returns a configured `SQLBuilder`:
+`Model::pagination($params)` maps common list query params to a builder:
 
-- `page`, `size` – pagination
-- `order` – string or array of "field,ASC|DESC"
-- `filter` – optional nested array understood by `QueryBuilder` (you can avoid this by composing a `QueryBuilder` yourself and calling `builder()->where($qb)` instead)
-- remaining key/values are applied as `=` filters; passing `'NULL'` uses `IS NULL`
+| Param | Meaning |
+|--------|---------|
+| `page`, `size` | Offset / limit |
+| `order` | `"field,ASC"` or `"field,DESC"` (string or list) |
+| `filter` | Serialized simple filters only (no EXISTS/subqueries) |
+| other keys | Equality filters; value `'NULL'` becomes `IS NULL` |
 
 ```php
-$builder = MyEntity::pagination([
+$collection = MyEntity::pagination([
     'page' => 3,
     'size' => 25,
     'order' => ['created_at,DESC', 'id,ASC'],
-]);
-$collection = $builder->get();
+])->get();
 ```
 
-Column names and `ORDER BY` directions are validated (`ASC`/`DESC` only). Invalid identifiers or operators throw `\InvalidArgumentException`.
+Column names and sort directions are validated. Invalid input throws `\InvalidArgumentException`.
 
 ---
 
 ### Mass assignment
 
-`set()` and `create()` respect optional `$fillable` / `$guarded` on the model (Laravel-style):
+Control which keys `create()` and `set()` accept:
 
-- If `$fillable` is non-empty, only those attributes are accepted.
-- Else if `$guarded` is non-empty, those keys are stripped (`['*']` denies all).
-- Else all attributes are accepted (backward compatible).
+- Non-empty `$fillable` — only those keys
+- Else non-empty `$guarded` — everything except those keys (`['*']` blocks all)
+- Else — all keys (default)
 
-Primary keys are stripped during mass assignment via `set()` / `create()`. Use `forceSet()` when hydrating trusted data.
+Primary keys are never mass-assigned. Use `forceSet()` only for trusted hydration (for example after a DB read).
 
 ```php
 class User extends Model
@@ -420,15 +401,15 @@ class User extends Model
     public string $primary_key = 'id';
 
     protected array $fillable = ['name', 'email'];
-    // or: protected array $guarded = ['id', 'is_admin'];
+    // or: protected array $guarded = ['is_admin'];
 }
 ```
 
 ---
 
-### CRUD routes (security)
+### CRUD routes
 
-`Pachyderm\Orm\Helper\CRUDRoute` registers open list/read/create/update/delete endpoints. **Do not use in production without authorization and fillable attributes.**
+`CRUDRoute` wires list / read / create / update / delete endpoints. Treat it as a scaffold: **add authorization and `$fillable` before production use**.
 
 ```php
 use Pachyderm\Orm\Helper\CRUDRoute;
@@ -436,18 +417,14 @@ use Pachyderm\Orm\Helper\CRUDRoute;
 CRUDRoute::init($dispatcher);
 
 CRUDRoute::route('user', User::class, '/api/', function (string $action, mixed ...$args): bool {
-    // Return false to respond with HTTP 403
-    return /* current user may perform $action */;
+    // Return false → HTTP 403
+    return /* allowed? */;
 });
 ```
-
-Without the `$authorize` callback, every action is allowed. Prefer setting `$fillable` on the model as well.
 
 ---
 
 ### Testing
-
-Run the test suite:
 
 ```bash
 composer test
@@ -457,14 +434,17 @@ composer test
 
 ### Troubleshooting
 
-- For composite primary keys, set `public array $primary_key = ['col_a', 'col_b'];` on the model.
-- Prefer `QueryBuilder` for complex filters to avoid writing nested arrays manually.
+- **Composite primary keys** — `public array $primary_key = ['col_a', 'col_b'];`
+- **Complex filters** — build them with `QueryBuilder` instead of hand-written nested arrays
+- **`$order->customer` is always null** — call `->with('customer')` on the builder; associations are not loaded by default
+- **BelongsTo join missing columns** — list them on the related model via `protected array $_fields` (or override `getFields()`)
+- **Do not declare `public $customer_id`** next to `#[BelongsTo]` — keep the FK as a normal column attribute so it loads and saves correctly
 
 ---
 
-### Advanced: Custom DB engine (optional)
+### Custom DB engine
 
-By default, the ORM uses `\Pachyderm\Db`. When running outside Pachyderm or in tests, you may set a custom engine (must implement the same static API):
+By default the ORM uses `\Pachyderm\Db`. For tests or other environments:
 
 ```php
 use Pachyderm\Orm\Model;
@@ -472,21 +452,20 @@ use Pachyderm\Orm\Model;
 Model::setDbEngine(\App\Infrastructure\MyDb::class);
 ```
 
-Required static methods on a custom engine class:
-- `public static function query(string $sql): array`
-- `public static function insert(string $table, array $data): string|int|null`
-- `public static function update(string $table, array $data, array $where): void`
-- `public static function delete(string $table, string|array $primaryKey, string|int|array $id): void`
-- `public static function escape(mixed $value): string|int|float|null`
+Required static methods:
 
-Optional (preferred when available) — if present, `Model::query()` uses bound parameters instead of interpolating escaped values into SQL:
+- `query(string $sql): array`
+- `insert(string $table, array $data): string|int|null`
+- `update(string $table, array $data, array $where): void`
+- `delete(string $table, string|array $primaryKey, string|int|array $id): void`
+- `escape(mixed $value): string|int|float|null`
 
-- `public static function queryWithParams(string $sql, array $params): array`
+Optional (preferred when available):
 
-`SQLBuilder::toStatement()` returns `[sqlWithPlaceholders, params]` for engines that support this path.
+- `queryWithParams(string $sql, array $params): array` — used instead of interpolating escaped values
 
 ---
 
 ### License
 
-This project is licensed under the MIT License. See `LICENSE` for details.
+MIT. See `LICENSE`.

@@ -78,7 +78,7 @@ abstract class Model extends AbstractModel
          * If the object doesn't exists, we create it instead of saving it.
          */
         if ($this->getId() === null) {
-            $newModel = self::create($this->_data);
+            $newModel = self::create($this->stripAssociations($this->_data));
             $this->forceSet($newModel->_data);
             $this->syncOriginal();
             return;
@@ -86,7 +86,10 @@ abstract class Model extends AbstractModel
 
         $where = $this->_build_where();
         $changes = $this->getChanges();
-        $data = $this->_execute_hook('pre_update', $this->_data);
+        $data = $this->_execute_hook('pre_update', $this->stripAssociations($this->_data));
+        if (is_array($data)) {
+            $data = $this->stripAssociations($data);
+        }
 
         /**
          * Save the parent if the model is an inheritance.
@@ -174,6 +177,7 @@ abstract class Model extends AbstractModel
         $model = new static();
 
         $data = $model->filterMassAssignment($data, true);
+        $data = $model->stripAssociations($data);
 
         // TODO: Avoid doing that
         unset($data['created_at']);
@@ -187,6 +191,9 @@ abstract class Model extends AbstractModel
          * Call hook.
          */
         $data = $model->_execute_hook('pre_create', $data);
+        if (is_array($data)) {
+            $data = $model->stripAssociations($data);
+        }
 
         /**
          * Create parent if the model is an inheritance.
@@ -344,7 +351,8 @@ abstract class Model extends AbstractModel
 
             $model = new static($item);
             foreach ($relationModels as $name => $related) {
-                $model->$name = $related;
+                $property = $eager[$name]['property'] ?? $name;
+                $model->$property = $related;
             }
             $collection->add($model);
         }

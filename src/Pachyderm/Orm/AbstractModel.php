@@ -2,6 +2,7 @@
 
 namespace Pachyderm\Orm;
 
+use Pachyderm\Orm\Relation\BelongsToMap;
 use Pachyderm\Utils\IterableObjectSet;
 
 abstract class AbstractModel extends IterableObjectSet
@@ -107,6 +108,8 @@ abstract class AbstractModel extends IterableObjectSet
             $filtered[$k] = $v;
         }
 
+        $filtered = $this->stripAssociations($filtered);
+
         if (!empty($this->fillable)) {
             $allowed = array_flip($this->fillable);
             $filtered = array_intersect_key($filtered, $allowed);
@@ -131,6 +134,33 @@ abstract class AbstractModel extends IterableObjectSet
         }
 
         return $filtered;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function associationPropertyNames(): array
+    {
+        return BelongsToMap::associationPropertyNames(static::class);
+    }
+
+    /**
+     * Remove BelongsTo association keys and Model instances from a data bag.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function stripAssociations(array $data): array
+    {
+        foreach ($this->associationPropertyNames() as $name) {
+            unset($data[$name]);
+        }
+        foreach ($data as $key => $value) {
+            if ($value instanceof Model) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
     }
 
     /**
@@ -178,7 +208,7 @@ abstract class AbstractModel extends IterableObjectSet
                 $changes[$key] = $current;
             }
         }
-        return $changes;
+        return $this->stripAssociations($changes);
     }
 
     public function getId(): string|iterable|null

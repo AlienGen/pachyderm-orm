@@ -43,7 +43,7 @@ class BelongsToEagerLoadTest extends TestCase
         RelationObject::builder()->with('missing');
     }
 
-    public function testHydratesRelatedModel(): void
+    public function testHydratesRelatedModelOnAssociationProperty(): void
     {
         DbMock::setNextResults([
             [
@@ -62,6 +62,11 @@ class BelongsToEagerLoadTest extends TestCase
         $this->assertInstanceOf(SimpleObject::class, $model->simple);
         $this->assertSame(2, $model->simple->simple_object_id);
         $this->assertSame('Alice', $model->simple->name);
+
+        // FK scalar lives in _data; association does not.
+        $this->assertArrayHasKey('simple_id', $model->toArray());
+        $this->assertSame(2, $model->toArray()['simple_id']);
+        $this->assertArrayNotHasKey('simple', $model->toArray());
     }
 
     public function testHydratesNullWhenRelatedMissing(): void
@@ -81,10 +86,56 @@ class BelongsToEagerLoadTest extends TestCase
         $this->assertNull($model->simple);
     }
 
-    public function testWithoutWithDoesNotJoin(): void
+    public function testWithoutWithLeavesAssociationNull(): void
     {
-        $sql = RelationObject::builder()->build();
-        $this->assertStringNotContainsString('LEFT JOIN', $sql);
-        $this->assertSame([], RelationObject::builder()->eagerRelations());
+        DbMock::setNextResults([
+            [
+                'relation_object_id' => 1,
+                'simple_id' => 2,
+            ],
+        ]);
+
+        $model = RelationObject::builder()->first();
+
+        $this->assertNotNull($model);
+        $this->assertNull($model->simple);
+        $this->assertSame(2, $model->simple_id);
+        $this->assertStringNotContainsString('LEFT JOIN', RelationObject::builder()->build());
+    }
+
+    public function testSaveDoesNotPersistAssociationObject(): void
+    {
+        DbMock::setNextResults([
+            [
+                'relation_object_id' => 1,
+                'simple_id' => 2,
+                'simple__simple_object_id' => 2,
+                'simple__name' => 'Alice',
+            ],
+        ]);
+
+        $model = RelationObject::builder()->with('simple')->first();
+        $this->assertInstanceOf(SimpleObject::class, $model->simple);
+
+        // Avoid refresh find() after update by throwing away next results as empty not found...
+        // save() calls find() to refresh; provide a scalar-only row.
+        DbMock::setNextResults([
+            [
+                'relation_object_id' => 1,
+                'simple_id' => 2,
+            ],
+        ]);
+
+        $model->simple_id = 3;
+        $model->save();
+
+        $this->assertNotNull(DbMock::$lastUpdate);
+        $payload = DbMock::$lastUpdate['data'];
+        $this->assertArrayNotHasKey('simple', $payload);
+        foreach ($payload as $value) {
+            $this->assertNotInstanceOf(SimpleObject::class, $value);
+            $this->assertNotInstanceOf(\Pachyderm\Orm\Model::class, $value);
+        }
+        $this->assertSame(3, $payload['simple_id']);
     }
 }

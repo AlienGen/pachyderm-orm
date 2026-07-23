@@ -50,7 +50,7 @@ class SQLBuilder
 
     /**
      * Eager BelongsTo relations registered via with().
-     * @var array<string, array{class: class-string<Model>, prefix: string}>
+     * @var array<string, array{class: class-string<Model>, prefix: string, property: string}>
      */
     protected array $_eagerRelations = [];
 
@@ -294,6 +294,7 @@ class SQLBuilder
             $this->_eagerRelations[$relation] = [
                 'class' => $meta['related'],
                 'prefix' => $relation . '__',
+                'property' => $meta['property'],
             ];
         }
 
@@ -301,7 +302,7 @@ class SQLBuilder
     }
 
     /**
-     * @return array<string, array{class: class-string<Model>, prefix: string}>
+     * @return array<string, array{class: class-string<Model>, prefix: string, property: string}>
      */
     public function eagerRelations(): array
     {
