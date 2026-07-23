@@ -8,6 +8,8 @@ class SQLBuilder
 {
     protected const IDENTIFIER_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/';
 
+    protected const ALLOWED_AGGREGATES = ['MAX', 'MIN', 'COUNT', 'SUM', 'AVG'];
+
     protected const ALLOWED_OPERATORS = [
         'AND',
         'OR',
@@ -24,7 +26,12 @@ class SQLBuilder
         'NOT IN',
         'IS NULL',
         'IS NOT NULL',
+        'EXISTS',
+        'NOT EXISTS',
+        'COLUMN',
     ];
+
+    protected const COLUMN_OPERATORS = ['=', '!=', '<>', '<', '>', '<=', '>='];
 
     protected string $_table;
     protected Model|null $_model;
@@ -32,8 +39,12 @@ class SQLBuilder
     protected array $_fields = [];
     protected array $_joins = [];
     protected QueryBuilder $_filters;
+    protected QueryBuilder $_havings;
     protected array $_values = [];
     protected array $_orders = [];
+    /** @var list<string> */
+    protected array $_groups = [];
+    protected bool $_hasAggregate = false;
     protected int $_offset = 0;
     protected int $_limit = -1;
 
@@ -46,6 +57,7 @@ class SQLBuilder
     public function __construct(string|Model $table)
     {
         $this->_filters = new QueryBuilder();
+        $this->_havings = new QueryBuilder();
 
         if (is_string($table)) {
             $this->assertIdentifier($table);
@@ -132,6 +144,31 @@ class SQLBuilder
         return $this;
     }
 
+    public function selectMax(string $column, ?string $alias = null): SQLBuilder
+    {
+        return $this->selectAggregate('MAX', $column, $alias);
+    }
+
+    public function selectMin(string $column, ?string $alias = null): SQLBuilder
+    {
+        return $this->selectAggregate('MIN', $column, $alias);
+    }
+
+    public function selectSum(string $column, ?string $alias = null): SQLBuilder
+    {
+        return $this->selectAggregate('SUM', $column, $alias);
+    }
+
+    public function selectAvg(string $column, ?string $alias = null): SQLBuilder
+    {
+        return $this->selectAggregate('AVG', $column, $alias);
+    }
+
+    public function selectCount(string $column = '*', ?string $alias = 'count'): SQLBuilder
+    {
+        return $this->selectAggregate('COUNT', $column, $alias);
+    }
+
     /**
      * Filter WHERE.
      */
@@ -144,6 +181,64 @@ class SQLBuilder
     public function orWhere($field, $operand = NULL, $value = NULL): SQLBuilder
     {
         $this->_filters->orWhere($field, $operand, $value);
+        return $this;
+    }
+
+    /**
+     * Compare two columns (no bound value). Useful for correlated subqueries.
+     */
+    public function whereColumn(string $left, string $operator, string $right): SQLBuilder
+    {
+        return $this->addColumnComparison('AND', $left, $operator, $right);
+    }
+
+    public function orWhereColumn(string $left, string $operator, string $right): SQLBuilder
+    {
+        return $this->addColumnComparison('OR', $left, $operator, $right);
+    }
+
+    public function whereExists(SQLBuilder $sub): SQLBuilder
+    {
+        $this->_filters->where(['EXISTS' => [$sub]]);
+        return $this;
+    }
+
+    public function orWhereExists(SQLBuilder $sub): SQLBuilder
+    {
+        $this->_filters->orWhere(['EXISTS' => [$sub]]);
+        return $this;
+    }
+
+    public function whereNotExists(SQLBuilder $sub): SQLBuilder
+    {
+        $this->_filters->where(['NOT EXISTS' => [$sub]]);
+        return $this;
+    }
+
+    public function orWhereNotExists(SQLBuilder $sub): SQLBuilder
+    {
+        $this->_filters->orWhere(['NOT EXISTS' => [$sub]]);
+        return $this;
+    }
+
+    public function groupBy(string ...$columns): SQLBuilder
+    {
+        foreach ($columns as $column) {
+            $qualified = $this->qualifyColumn($column);
+            $this->_groups[] = $qualified;
+        }
+        return $this;
+    }
+
+    public function having($field, $operand = NULL, $value = NULL): SQLBuilder
+    {
+        $this->_havings->where($field, $operand, $value);
+        return $this;
+    }
+
+    public function orHaving($field, $operand = NULL, $value = NULL): SQLBuilder
+    {
+        $this->_havings->orWhere($field, $operand, $value);
         return $this;
     }
 
@@ -243,20 +338,15 @@ class SQLBuilder
      */
     public function build(): string
     {
-        $sql = $this->_select();
-        $sql .= $this->_joins();
+        return $this->buildInternal(false, false);
+    }
 
-        $filters = $this->_filters->build();
-        if (!empty($filters)) {
-            $sql .= ' WHERE ' . $this->_generatefilters($filters);
-        }
-
-        $sql .= $this->_orders();
-
-        if ($this->_offset >= 0 && $this->_limit >= 0) {
-            $sql .= ' LIMIT ' . $this->_offset . ', ' . $this->_limit;
-        }
-        return $sql;
+    /**
+     * Build SQL suitable for embedding as a subquery / EXISTS.
+     */
+    public function buildSubquery(bool $forExists = false): string
+    {
+        return $this->buildInternal(true, $forExists);
     }
 
     /**
@@ -345,14 +435,100 @@ class SQLBuilder
     }
 
     /**
-     * Add a new value to be escaped.
+     * Add a new value to be escaped (or embed a subquery).
      */
     protected function _value($value): string
     {
+        if ($value instanceof SQLBuilder) {
+            return $this->_embedSubquery($value, false);
+        }
+
         $c = count($this->_values);
         $varName = 'value' . ($c + 1);
         $this->_values[$varName] = $value;
         return ':' . $varName;
+    }
+
+    protected function buildInternal(bool $subquery, bool $forExists): string
+    {
+        $this->_values = [];
+
+        $sql = $this->_select($subquery, $forExists);
+        $sql .= $this->_joins();
+
+        $filters = $this->_filters->build();
+        if (!empty($filters)) {
+            $sql .= ' WHERE ' . $this->_generatefilters($filters);
+        }
+
+        $sql .= $this->_groupBy();
+
+        $havings = $this->_havings->build();
+        if (!empty($havings)) {
+            $sql .= ' HAVING ' . $this->_generatefilters($havings);
+        }
+
+        $sql .= $this->_orders();
+
+        if ($this->_offset >= 0 && $this->_limit >= 0) {
+            $sql .= ' LIMIT ' . $this->_offset . ', ' . $this->_limit;
+        }
+        return $sql;
+    }
+
+    protected function selectAggregate(string $agg, string $column, ?string $alias): SQLBuilder
+    {
+        $agg = strtoupper($agg);
+        if (!in_array($agg, self::ALLOWED_AGGREGATES, true)) {
+            throw new \InvalidArgumentException('Invalid aggregate function: ' . $agg);
+        }
+
+        if ($column === '*') {
+            if ($agg !== 'COUNT') {
+                throw new \InvalidArgumentException('Only COUNT may use *');
+            }
+            $qualified = '*';
+        } else {
+            $qualified = $this->qualifyColumn($column);
+        }
+
+        if ($alias === null || $alias === '') {
+            $base = $column === '*' ? 'all' : (str_contains($column, '.') ? substr($column, strrpos($column, '.') + 1) : $column);
+            $alias = strtolower($agg) . '_' . $base;
+        }
+        $this->assertIdentifier($alias);
+
+        $this->_hasAggregate = true;
+        $this->_fields[$alias] = [
+            'agg' => $agg,
+            'column' => $qualified,
+            'as' => $alias,
+        ];
+        return $this;
+    }
+
+    protected function qualifyColumn(string $column): string
+    {
+        if (strpos($column, '.') === false) {
+            $column = $this->_table . '.' . $column;
+        }
+        $this->assertIdentifier($column);
+        return $column;
+    }
+
+    protected function addColumnComparison(string $boolOp, string $left, string $operator, string $right): SQLBuilder
+    {
+        $this->assertIdentifier($left);
+        $this->assertIdentifier($right);
+        if (!in_array($operator, self::COLUMN_OPERATORS, true)) {
+            throw new \InvalidArgumentException('Invalid column comparison operator: ' . $operator);
+        }
+        if ($boolOp === 'OR') {
+            $this->_filters->orWhere(['COLUMN' => [$left, $operator, $right]]);
+        } else {
+            $this->_filters->where(['COLUMN' => [$left, $operator, $right]]);
+        }
+        return $this;
     }
 
     /**
@@ -391,15 +567,39 @@ class SQLBuilder
         return $this;
     }
 
+    protected function _embedSubquery(SQLBuilder $sub, bool $forExists): string
+    {
+        $sql = $sub->buildSubquery($forExists);
+        $replacements = [];
+        foreach ($sub->values() as $key => $value) {
+            $replacements[':' . $key] = $this->_value($value);
+        }
+        uksort($replacements, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+        if ($replacements !== []) {
+            $sql = strtr($sql, $replacements);
+        }
+        return '(' . $sql . ')';
+    }
+
     /**
      * Generate the SELECT statement.
      */
-    protected function _select(): string
+    protected function _select(bool $subquery = false, bool $forExists = false): string
     {
         $fieldsArray = [];
         $fromTable = false;
+        $skipStar = $this->_hasAggregate || $this->_groups !== [] || $forExists;
+
         foreach ($this->_fields as $field) {
             if (is_array($field)) {
+                if (isset($field['agg'])) {
+                    if ($field['column'] === '*') {
+                        $fieldsArray[] = $field['agg'] . '(*) AS ' . $this->_q($field['as']);
+                    } else {
+                        $fieldsArray[] = $field['agg'] . '(' . $this->_q($field['column']) . ') AS ' . $this->_q($field['as']);
+                    }
+                    continue;
+                }
                 $fieldsArray[] = $this->_q($field['expr']) . ' AS ' . $this->_q($field['as']);
                 continue;
             }
@@ -410,13 +610,20 @@ class SQLBuilder
             }
         }
 
-        if (!$fromTable) {
+        if ($forExists && $fieldsArray === []) {
+            $fieldsArray[] = '1';
+        } elseif (!$skipStar && !$fromTable) {
             array_unshift($fieldsArray, $this->_q($this->_table) . '.*');
         }
 
-        $fields = join(', ', $fieldsArray);
+        if ($fieldsArray === []) {
+            throw new \InvalidArgumentException('SELECT requires at least one column when using GROUP BY or aggregates');
+        }
 
-        return 'SELECT SQL_CALC_FOUND_ROWS ' . $fields . ' FROM ' . $this->_q($this->_table);
+        $fields = join(', ', $fieldsArray);
+        $prefix = $subquery ? 'SELECT ' : 'SELECT SQL_CALC_FOUND_ROWS ';
+
+        return $prefix . $fields . ' FROM ' . $this->_q($this->_table);
     }
 
     /**
@@ -466,7 +673,7 @@ class SQLBuilder
 
         self::assertOperator((string) $op);
         $values = $array[$op];
-        $operandCount = count($values);
+        $operandCount = is_array($values) ? count($values) : 0;
 
         switch ($op) {
             case 'AND':
@@ -482,6 +689,25 @@ class SQLBuilder
                 $sql .= ')';
                 break;
 
+            case 'EXISTS':
+            case 'NOT EXISTS':
+                if ($operandCount < 1 || !$values[0] instanceof SQLBuilder) {
+                    throw new \InvalidArgumentException($op . ' requires an SQLBuilder subquery');
+                }
+                $sql = $op . ' ' . $this->_embedSubquery($values[0], true);
+                break;
+
+            case 'COLUMN':
+                if ($operandCount < 3) {
+                    throw new \InvalidArgumentException('COLUMN comparison requires left, operator, right');
+                }
+                [$left, $cmp, $right] = $values;
+                if (!in_array($cmp, self::COLUMN_OPERATORS, true)) {
+                    throw new \InvalidArgumentException('Invalid column comparison operator: ' . $cmp);
+                }
+                $sql = $this->_q($left) . ' ' . $cmp . ' ' . $this->_q($right);
+                break;
+
             default:
                 if ($operandCount > 1) {
                     $sql = $this->_q($values[0]) . ' ' . $op . ' ' . $this->_value($values[1]);
@@ -491,6 +717,18 @@ class SQLBuilder
                 break;
         }
         return $sql;
+    }
+
+    protected function _groupBy(): string
+    {
+        if ($this->_groups === []) {
+            return '';
+        }
+        $cols = [];
+        foreach ($this->_groups as $col) {
+            $cols[] = $this->_q($col);
+        }
+        return ' GROUP BY ' . join(', ', $cols);
     }
 
     protected function _orders(): string

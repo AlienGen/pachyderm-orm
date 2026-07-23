@@ -179,6 +179,41 @@ $filters = (new QueryBuilder())
 $results = MyEntity::builder()->where($filters)->get();
 ```
 
+#### EXISTS, correlated subqueries, and aggregates
+
+These APIs live on `SQLBuilder` only (not in serializable `QueryBuilder` / `pagination` `filter` JSON).
+
+```php
+// EXISTS with correlation
+$orders = Order::builder()->whereExists(
+    OrderItem::builder()
+        ->whereColumn('order_items.order_id', '=', 'orders.id')
+        ->where('qty', '>', 0)
+)->get();
+
+// NOT EXISTS
+User::builder()->whereNotExists(
+    Flag::builder()->whereColumn('flags.user_id', '=', 'users.id')
+)->get();
+
+// Subquery as a value (IN / comparisons)
+User::builder()->where(
+    'id',
+    'IN',
+    Order::builder()->select('user_id')->where('status', '=', 'PAID')
+)->get();
+
+// Aggregates + GROUP BY + HAVING
+Order::builder()
+    ->select('status')
+    ->selectMax('amount', 'max_amount') // also: selectMin/Sum/Avg/Count
+    ->groupBy('status')
+    ->having('max_amount', '>', 100)
+    ->get();
+```
+
+When using aggregates or `groupBy()`, `table.*` is not selected automatically—select the grouped columns explicitly. Related models hydrate as attribute bags via `get()` as usual.
+
 ---
 
 ### Relations
