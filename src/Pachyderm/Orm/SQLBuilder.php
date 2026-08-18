@@ -375,6 +375,7 @@ class SQLBuilder
         $sql = $this->build();
         $values = $this->values();
 
+        $replacements = [];
         foreach ($values as $key => $value) {
             if (is_array($value)) {
                 $list = [];
@@ -392,9 +393,11 @@ class SQLBuilder
             } else {
                 $safeValue = '"' . $engine::escape($value) . '"';
             }
-            $sql = str_replace(':' . $key, $safeValue, $sql);
+            $replacements[':' . $key] = $safeValue;
         }
-        return $sql;
+        // Replace longest placeholders first so :value1 never corrupts :value10.
+        uksort($replacements, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+        return $replacements !== [] ? strtr($sql, $replacements) : $sql;
     }
 
     /**
