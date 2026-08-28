@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Model\CompositeKeyObject;
 use Model\FillableObject;
 use Model\GuardedObject;
 use Model\SimpleObject;
@@ -17,6 +18,52 @@ class MassAssignmentAndFindTest extends TestCase
         SimpleObject::setDbEngine(DbMock::class);
         FillableObject::setDbEngine(DbMock::class);
         GuardedObject::setDbEngine(DbMock::class);
+        CompositeKeyObject::setDbEngine(DbMock::class);
+    }
+
+    public function testCreateStripsScalarPrimaryKey(): void
+    {
+        SimpleObject::create([
+            'simple_object_id' => 99,
+            'name' => 'Alice',
+        ]);
+
+        $this->assertNotNull(DbMock::$lastInsert);
+        $this->assertArrayNotHasKey('simple_object_id', DbMock::$lastInsert['data']);
+        $this->assertSame('Alice', DbMock::$lastInsert['data']['name']);
+    }
+
+    public function testCreateKeepsCompositePrimaryKeys(): void
+    {
+        CompositeKeyObject::create([
+            'left_id' => 10,
+            'right_id' => 20,
+            'label' => 'link',
+        ]);
+
+        $this->assertNotNull(DbMock::$lastInsert);
+        $payload = DbMock::$lastInsert['data'];
+        $this->assertSame(10, $payload['left_id']);
+        $this->assertSame(20, $payload['right_id']);
+        $this->assertSame('link', $payload['label']);
+    }
+
+    public function testSetStillStripsCompositePrimaryKeys(): void
+    {
+        $model = new CompositeKeyObject([
+            'left_id' => 10,
+            'right_id' => 20,
+            'label' => 'old',
+        ]);
+        $model->set([
+            'left_id' => 99,
+            'right_id' => 88,
+            'label' => 'new',
+        ]);
+
+        $this->assertSame(10, $model->left_id);
+        $this->assertSame(20, $model->right_id);
+        $this->assertSame('new', $model->label);
     }
 
     public function testFillableFiltersSet(): void

@@ -176,7 +176,10 @@ abstract class Model extends AbstractModel
     {
         $model = new static();
 
-        $data = $model->filterMassAssignment($data, true);
+        // Composite keys are the identity of a relation table and must be inserted.
+        // Scalar (typically auto-increment) keys are stripped; set() still strips all PKs.
+        $stripPrimaryKey = !is_array($model->primary_key);
+        $data = $model->filterMassAssignment($data, $stripPrimaryKey);
         $data = $model->stripAssociations($data);
 
         // TODO: Avoid doing that

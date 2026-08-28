@@ -405,7 +405,7 @@ Control which keys `create()` and `set()` accept:
 - Else non-empty `$guarded` — everything except those keys (`['*']` blocks all)
 - Else — all keys (default)
 
-Primary keys are never mass-assigned. Use `forceSet()` only for trusted hydration (for example after a DB read).
+Scalar primary keys are stripped on `create()` and `set()`. Composite primary keys (relation tables) are kept on `create()` so they can be inserted, and stripped on `set()` so identity cannot be changed. Use `forceSet()` only for trusted hydration (for example after a DB read).
 
 ```php
 class User extends Model
